@@ -101,6 +101,7 @@ WfsTileProvider.prototype.placeHolder = function(tile, red) {
     if (red){
         color = Cesium.Color.fromBytes(255, 0, 0, 255);
     }
+    try{
     tile.data.primitive.add( new Cesium.Primitive({
         geometryInstances: new Cesium.GeometryInstance({
             geometry: new Cesium.RectangleOutlineGeometry({
@@ -114,6 +115,7 @@ WfsTileProvider.prototype.placeHolder = function(tile, red) {
             flat: true
         })
     }));
+    } catch (e){ debugger;}
 };
 
 WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
@@ -131,10 +133,13 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
         var earthRadius = 6371000;
         var tileSizeMeters = Math.abs(earthRadius*(tile.rectangle.south - tile.rectangle.north));
 
+
         tile.data.primitive = new Cesium.PrimitiveCollection();
+
         if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
             tile.state = Cesium.QuadtreeTileLoadState.LOADING;
 
+            this.placeHolder(tile);
             var request = this._url+
                     '?SERVICE=WFS'+
                     '&VERSION=1.0.0'+
@@ -150,7 +155,12 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
 
             var that = this;
             this._workQueue.addTask(request, 
-                    function(w){
+                    (function(t){ return function(w){
+                        if (typeof t.data.primitive == 'undefined'){
+                            // tile suppressed while we waited for reply
+                            // receive messages from worker until done
+                            return w.data != 'done';
+                        }
                         if (w.data != 'done'){
                             var mat = new Cesium.Material({
                                 fabric : {
@@ -161,7 +171,7 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
                                     }
                                 }
                             });
-                            tile.data.primitive.add(new Cesium.Primitive({
+                            t.data.primitive.add(new Cesium.Primitive({
                                 geometryInstances: new Cesium.GeometryInstance({
                                     geometry: geometryFromArrays(w.data)
                                 }),
@@ -173,16 +183,15 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
                             }));
                             return true;
                         }
-                        that.placeHolder(tile);
-                        tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
-                        tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
-                        Cesium.Cartesian3.fromElements(tile.data.boundingSphere2D.center.z, tile.data.boundingSphere2D.center.x, tile.data.boundingSphere2D.center.y, tile.data.boundingSphere2D.center);
+                        t.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(t.rectangle);
+                        t.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(t.rectangle, frameState.mapProjection);
+                        Cesium.Cartesian3.fromElements(t.data.boundingSphere2D.center.z, t.data.boundingSphere2D.center.x, t.data.boundingSphere2D.center.y, t.data.boundingSphere2D.center);
 
-                        tile.data.primitive.update(context, frameState, []);
-                        tile.state = Cesium.QuadtreeTileLoadState.DONE;
-                        tile.renderable = true;
+                        t.data.primitive.update(context, frameState, []);
+                        t.state = Cesium.QuadtreeTileLoadState.DONE;
+                        t.renderable = true;
                         return false;
-                    });
+                    };})(tile) );
         } else {
             this.placeHolder(tile);
             tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);

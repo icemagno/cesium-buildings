@@ -64,7 +64,7 @@ console.log( Cesium.Cartesian3.fromDegrees(4.84, 45.74, 500) );
 
 if(1){
     var viewer = new Cesium.Viewer('cesiumContainer');
-    var extent = new Cesium.Rectangle.fromDegrees(4.84, 45.74, 4.86, 45.76);
+    var extent = new Cesium.Rectangle.fromDegrees(4.84, 45.745, 4.86, 45.765);
     viewer.camera.viewRectangle(extent);
     var scene = viewer.scene;
 
@@ -200,7 +200,7 @@ if(1){
                            'http://localhost/cgi-bin/tinyows', 
                            'tows:textured_citygml_lat_long', 
                            'http://localhost/w/textures',
-                           0, 1000)
+                           0, 10000)
     }));
 
     // antialiasing please

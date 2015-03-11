@@ -328,6 +328,21 @@ function geomFromWfsTin(coord, textureCoord){
     }
 }
 
+function geomCopy(geom){
+    return {
+        indices:new Uint16Array(geom.indices),
+        position:new Float64Array(geom.position), 
+        normal:new Float32Array(geom.normal), 
+        tangent:new Float32Array(geom.tangent), 
+        binormal:new Float32Array(geom.binormal), 
+        st:new Float32Array(geom.st), 
+        bsphere_center:new Float32Array(geom.center), 
+        bsphere_radius:geom.radius,
+        bbox:new Array(geom.bbox),
+        gid:geom.gid
+    };
+}
+
 function geomFromWfs(type, coord, textureCoord){
     if (type != 'MultiPolygon') throw "Unhandled geometry type '"+type+"'";
 
@@ -348,22 +363,72 @@ function geomFromWfs(type, coord, textureCoord){
  * tiles age if they are not called, old tiles are removed along with
  * the underlying geometrie
  */
+
+function covers(first, second){
+    return first[0] <= second[0] && first[1] <= second[1] &&
+           first[2] >= second[2] && first[3] >= second[3];
+}
+
+function onSouthOrEast(tileBBox, bbox){
+    return (tileBBox[0] < bbox[2] && bbox[0] < tileBBox[0])
+        || (tileBBox[1] < bbox[3] && bbox[1] < tileBBox[1]);
+}
+
+function inTile(tileBBox, geom){
+    return covers(tileBBox, geom) && !onSouthOrEast(tileBBox, geom);
+}
+
 function GeometryCache(){
-    this._geometries = {};
     this._tiles = [];
+    this._geometries = {};
 }
 
 GeometryCache.prototype.get = function(tileBBox){
+    var i, j;
+    console.log("we have ", this._tiles.length, " tiles");
+    for (i=0; i<this._tiles.length; i++){
+        if (covers(this._tiles[i].bbox, tileBBox)){
+            console.log("found tile");
+            var geoms = [];
+            var gids = this._tiles[i].gids;
+            var geometries = this._geometries;
+            for (j=0; j<gids.length; j++){
+                if( inTile(tileBBox, geometries[gids[j]].bbox)){
+                    geoms.push(geomCopy(this._geometries[gids[j]]));
+                }
+            }
+            return geoms;
+        }
+    }
     return [];
 }
 
-GeometryCache.prototype.add = function(tileBBox, geom){
-//    this._geometries[geom.gid] = geom;
+GeometryCache.prototype.addEmpty = function(tileBBox){
+    for (i=0; i<this._tiles.length; i++){
+        if (covers(this._tiles[i].bbox, tileBBox)){ 
+            return;
+        }
+    }
+    this._tiles.push({bbox:tileBBox, gids:[]});
 }
 
-function onSouthOrEast(bbox, tileBBox){
-    return (tileBBox[0] < bbox[2] && bbox[0] < tileBBox[0])
-        || (tileBBox[1] < bbox[3] && bbox[1] < tileBBox[1]);
+GeometryCache.prototype.add = function(tileBBox, geom){
+    var i;
+    for (i=0; i<this._tiles.length; i++){
+        if (covers(this._tiles[i].bbox, tileBBox)){
+            if (this._tiles[i].gids.indexOf(geom.gid) == -1){
+                console.log("adding ", geom.gid, "to tile ", i); 
+                this._geometries[geom.gid] = geomCopy(geom);
+                this._tiles[i].gids.push(geom.gid);
+            }
+            return;
+        }
+    }
+    
+    // create a new tile
+    debugger;
+    this._geometries[geom.gid] = geomCopy(geom);
+    this._tiles.push({bbox:tileBBox, gids:[geom.gid]});
 }
 
 var texRe = /\((.*),"(.*)"\)/;
@@ -378,7 +443,6 @@ onmessage = function(o) {
         var kv = param[i].split('=')
         queries[kv[0].toUpperCase()] = kv[1];
     }
-    
 
     var tileBBox = JSON.parse('['+queries['BBOX']+']');
     var geometries  = geometryCache.get(tileBBox);
@@ -402,9 +466,18 @@ onmessage = function(o) {
 
     load(o.data, function(xhr) {
         var geoJson = JSON.parse(xhr.responseText);
+        geometryCache.addEmpty(tileBBox);
         //console.log("loading features", geoJson.features.length);
         for (var f = 0; f < geoJson.features.length; f++) {
-            if (!onSouthOrEast(geoJson.features[f].geometry.bbox, tileBBox)){
+            var bbox = geoJson.features[f].geometry.bbox;
+            if (bbox.length == 6){
+                bbox = [geoJson.features[f].geometry.bbox[0], 
+                        geoJson.features[f].geometry.bbox[1],
+                        geoJson.features[f].geometry.bbox[3],
+                        geoJson.features[f].geometry.bbox[4]];
+            }
+
+            if (!onSouthOrEast(tileBBox, bbox)){
                 var texP = texRe.exec(geoJson.features[f].properties.tex);
                 // remove the texture from properties
                 delete geoJson.features[f].properties.tex;
@@ -417,7 +490,7 @@ onmessage = function(o) {
                 var geom = geomFromWfs(type, coord, st);
                 geom.texture = texP[1];
                 geom.properties = JSON.stringify(geoJson.features[f].properties);
-                geom.bbox = geoJson.features[f].geometry.coordinates.bbox;
+                geom.bbox = bbox;
                 geom.gid = geoJson.features[f].properties.gid;
 
                 geometryCache.add(tileBBox, geom);
