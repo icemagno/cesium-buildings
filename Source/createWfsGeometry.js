@@ -369,13 +369,18 @@ function covers(first, second){
            first[2] >= second[2] && first[3] >= second[3];
 }
 
+function intersects(first, second){
+    return !(first[2] < second[0] || first[0] > second[2] 
+          || first[3] < second[1] || first[0] > second[3]);
+}
+
 function onSouthOrEast(tileBBox, bbox){
     return (tileBBox[0] < bbox[2] && bbox[0] < tileBBox[0])
         || (tileBBox[1] < bbox[3] && bbox[1] < tileBBox[1]);
 }
 
 function inTile(tileBBox, geom){
-    return covers(tileBBox, geom) && !onSouthOrEast(tileBBox, geom);
+    return intersects(tileBBox, geom) && !onSouthOrEast(tileBBox, geom);
 }
 
 function GeometryCache(){
@@ -433,7 +438,7 @@ GeometryCache.prototype.add = function(tileBBox, geom){
 
 var texRe = /\((.*),"(.*)"\)/;
 
-var geometryCache = new GeometryCache();
+//var geometryCache = new GeometryCache();
 
 onmessage = function(o) {
     var i;
@@ -444,37 +449,24 @@ onmessage = function(o) {
         queries[kv[0].toUpperCase()] = kv[1];
     }
 
+    console.log(o.data);
     var tileBBox = JSON.parse('['+queries['BBOX']+']');
-    var geometries  = geometryCache.get(tileBBox);
-    for (i = 0; i < geometries.length; i++) {
-        postMessage( 
-            geometries[i], 
-            [
-                geometries[i].indices.buffer,
-                geometries[i].position.buffer, 
-                geometries[i].normal.buffer, 
-                geometries[i].tangent.buffer, 
-                geometries[i].binormal.buffer, 
-                geometries[i].st.buffer, 
-                geometries[i].bsphere_center.buffer 
-            ]
-        );
-    }
-    if (geometries.length) postMessage('done');
-
-    console.log( tileBBox );
 
     load(o.data, function(xhr) {
         var geoJson = JSON.parse(xhr.responseText);
-        geometryCache.addEmpty(tileBBox);
         //console.log("loading features", geoJson.features.length);
         for (var f = 0; f < geoJson.features.length; f++) {
-            var bbox = geoJson.features[f].geometry.bbox;
+            var bbox = new Float32Array(4);
             if (bbox.length == 6){
-                bbox = [geoJson.features[f].geometry.bbox[0], 
-                        geoJson.features[f].geometry.bbox[1],
-                        geoJson.features[f].geometry.bbox[3],
-                        geoJson.features[f].geometry.bbox[4]];
+                bbox[0] = geoJson.features[f].geometry.bbox[0];
+                bbox[1] = geoJson.features[f].geometry.bbox[1];
+                bbox[2] = geoJson.features[f].geometry.bbox[3];
+                bbox[3] = geoJson.features[f].geometry.bbox[4];
+            } else {
+                bbox[0] = geoJson.features[f].geometry.bbox[0];
+                bbox[1] = geoJson.features[f].geometry.bbox[1];
+                bbox[2] = geoJson.features[f].geometry.bbox[2];
+                bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
 
             if (!onSouthOrEast(tileBBox, bbox)){
@@ -493,8 +485,6 @@ onmessage = function(o) {
                 geom.bbox = bbox;
                 geom.gid = geoJson.features[f].properties.gid;
 
-                geometryCache.add(tileBBox, geom);
-
                 try {
                 postMessage( 
                     geom, 
@@ -505,7 +495,8 @@ onmessage = function(o) {
                         geom.tangent.buffer, 
                         geom.binormal.buffer, 
                         geom.st.buffer, 
-                        geom.bsphere_center.buffer 
+                        geom.bsphere_center.buffer,
+                        geom.bbox.buffer
                     ]
                 );
                 }catch (e){

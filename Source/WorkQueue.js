@@ -12,7 +12,6 @@ WorkQueue.prototype._updateWorker = function(){
     if (this._worker.onmessage == null){ 
         var task = this._tasks.shift();
         if (typeof task != 'undefined'){
-            console.log("start task");
             var that = this;
             this._worker.onmessage = (function(task, worker){
                     return function(m){
