@@ -221,8 +221,9 @@ function testGeometry(){
         tangent:tangent, 
         binormal:binormal, 
         st:st, 
-        boundingSphere:{center:center, radius:radius}
-    };
+        bsphere_center:center, 
+        bsphere_radius:radius
+    }
 }
 
 function geomFromWfsTin(coord, textureCoord){
@@ -315,8 +316,6 @@ function geomFromWfsTin(coord, textureCoord){
         }
     }
 
-
-
     return {
         indices:indices,
         position:position, 
@@ -324,8 +323,9 @@ function geomFromWfsTin(coord, textureCoord){
         tangent:tangent, 
         binormal:binormal, 
         st:st, 
-        boundingSphere:{center:center, radius:radius}
-    };
+        bsphere_center:center, 
+        bsphere_radius:radius
+    }
 }
 
 function geomFromWfs(type, coord, textureCoord){
@@ -338,49 +338,106 @@ function geomFromWfs(type, coord, textureCoord){
     }
 }
 
+/** Store a number of tiles
+ * in a hierachical maner
+ * the 'tiles' are defined by the user when adding tiles
+ * we look for a tile that is within an already requested
+ * tile, if it exist, we look for the tile below, or we group
+ * geom to create it
+ * geoms are stored independently, indexed by gid
+ * tiles age if they are not called, old tiles are removed along with
+ * the underlying geometrie
+ */
+function GeometryCache(){
+    this._geometries = {};
+    this._tiles = [];
+}
+
+GeometryCache.prototype.get = function(tileBBox){
+    return [];
+}
+
+GeometryCache.prototype.add = function(tileBBox, geom){
+//    this._geometries[geom.gid] = geom;
+}
+
+function onSouthOrEast(bbox, tileBBox){
+    return (tileBBox[0] < bbox[2] && bbox[0] < tileBBox[0])
+        || (tileBBox[1] < bbox[3] && bbox[1] < tileBBox[1]);
+}
+
 var texRe = /\((.*),"(.*)"\)/;
 
+var geometryCache = new GeometryCache();
+
 onmessage = function(o) {
+    var i;
+    var param = o.data.replace(/^.*\?/,'').split('&');
+    var queries = {}
+    for (i=0; i<param.length; i++){
+        var kv = param[i].split('=')
+        queries[kv[0].toUpperCase()] = kv[1];
+    }
+    
+
+    var tileBBox = JSON.parse('['+queries['BBOX']+']');
+    var geometries  = geometryCache.get(tileBBox);
+    for (i = 0; i < geometries.length; i++) {
+        postMessage( 
+            geometries[i], 
+            [
+                geometries[i].indices.buffer,
+                geometries[i].position.buffer, 
+                geometries[i].normal.buffer, 
+                geometries[i].tangent.buffer, 
+                geometries[i].binormal.buffer, 
+                geometries[i].st.buffer, 
+                geometries[i].bsphere_center.buffer 
+            ]
+        );
+    }
+    if (geometries.length) postMessage('done');
+
+    console.log( tileBBox );
+
     load(o.data, function(xhr) {
         var geoJson = JSON.parse(xhr.responseText);
         //console.log("loading features", geoJson.features.length);
         for (var f = 0; f < geoJson.features.length; f++) {
-            var texP = texRe.exec(geoJson.features[f].properties.tex);
-            // remove the texture from properties
-            delete geoJson.features[f].properties.tex;
-            var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
-            var st = JSON.parse(arrJson);
-            var coord = geoJson.features[f].geometry.coordinates;
-            var type = geoJson.features[f].geometry.type;
-            
-            //var geom = testGeometry();
-            var geom = geomFromWfs(type, coord, st);
+            if (!onSouthOrEast(geoJson.features[f].geometry.bbox, tileBBox)){
+                var texP = texRe.exec(geoJson.features[f].properties.tex);
+                // remove the texture from properties
+                delete geoJson.features[f].properties.tex;
+                var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
+                var st = JSON.parse(arrJson);
+                var coord = geoJson.features[f].geometry.coordinates;
+                var type = geoJson.features[f].geometry.type;
+                
+                //var geom = testGeometry();
+                var geom = geomFromWfs(type, coord, st);
+                geom.texture = texP[1];
+                geom.properties = JSON.stringify(geoJson.features[f].properties);
+                geom.bbox = geoJson.features[f].geometry.coordinates.bbox;
+                geom.gid = geoJson.features[f].properties.gid;
 
-            try {
-            postMessage( 
-                {
-                    indices:geom.indices,
-                    position:geom.position, 
-                    normal:geom.normal, 
-                    tangent:geom.tangent, 
-                    binormal:geom.binormal, 
-                    st:geom.st, 
-                    center:geom.boundingSphere.center, 
-                    radius:geom.boundingSphere.radius, 
-                    texture:texP[1],
-                    properties:JSON.stringify(geoJson.features[f].properties)
-                }, 
-                [
-                    geom.indices.buffer,
-                    geom.position.buffer, 
-                    geom.normal.buffer, 
-                    geom.tangent.buffer, 
-                    geom.binormal.buffer, 
-                    geom.st.buffer, 
-                    geom.boundingSphere.center.buffer 
-                ]);
-            }catch (e){
-                debugger;
+                geometryCache.add(tileBBox, geom);
+
+                try {
+                postMessage( 
+                    geom, 
+                    [
+                        geom.indices.buffer,
+                        geom.position.buffer, 
+                        geom.normal.buffer, 
+                        geom.tangent.buffer, 
+                        geom.binormal.buffer, 
+                        geom.st.buffer, 
+                        geom.bsphere_center.buffer 
+                    ]
+                );
+                }catch (e){
+                    debugger;
+                }
             }
         }
 

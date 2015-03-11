@@ -31,12 +31,14 @@ function geometryFromArrays(data){
     });
     */
     
-    var center = new Cesium.Cartesian3(data.center[0], data.center[1], data.center[2]);
+    var center = new Cesium.Cartesian3(data.bsphere_center[0], 
+                                       data.bsphere_center[1], 
+                                       data.bsphere_center[2]);
     return new Cesium.Geometry({
         attributes : attributes,
         indices : data.indices,
         primitiveType : Cesium.PrimitiveType.TRIANGLES,
-        boundingSphere : new Cesium.BoundingSphere(center, data.radius)
+        boundingSphere : new Cesium.BoundingSphere(center, data.bsphere_radius)
     });
 }
 
@@ -99,7 +101,7 @@ WfsTileProvider.prototype.placeHolder = function(tile, red) {
     if (red){
         color = Cesium.Color.fromBytes(255, 0, 0, 255);
     }
-    tile.data.primitive = new Cesium.Primitive({
+    tile.data.primitive.add( new Cesium.Primitive({
         geometryInstances: new Cesium.GeometryInstance({
             geometry: new Cesium.RectangleOutlineGeometry({
                 rectangle: tile.rectangle
@@ -111,7 +113,7 @@ WfsTileProvider.prototype.placeHolder = function(tile, red) {
         appearance: new Cesium.PerInstanceColorAppearance({
             flat: true
         })
-    });
+    }));
 };
 
 WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
@@ -129,8 +131,10 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
         var earthRadius = 6371000;
         var tileSizeMeters = Math.abs(earthRadius*(tile.rectangle.south - tile.rectangle.north));
 
+        tile.data.primitive = new Cesium.PrimitiveCollection();
         if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
             tile.state = Cesium.QuadtreeTileLoadState.LOADING;
+
             var request = this._url+
                     '?SERVICE=WFS'+
                     '&VERSION=1.0.0'+
@@ -145,7 +149,6 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
                         DEGREES_PER_RADIAN * tile.rectangle.north;
 
             var that = this;
-            var primCol = new Cesium.PrimitiveCollection();
             this._workQueue.addTask(request, 
                     function(w){
                         if (w.data != 'done'){
@@ -158,19 +161,19 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
                                     }
                                 }
                             });
-                            primCol.add(new Cesium.Primitive({
+                            tile.data.primitive.add(new Cesium.Primitive({
                                 geometryInstances: new Cesium.GeometryInstance({
                                     geometry: geometryFromArrays(w.data)
                                 }),
                                 appearance : new Cesium.MaterialAppearance({
-                                    material : mat,
+                                    //material : mat,
                                     faceForward : true
                                   }),
                                 asynchronous : false
                             }));
                             return true;
                         }
-                        tile.data.primitive = primCol;
+                        that.placeHolder(tile);
                         tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
                         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
                         Cesium.Cartesian3.fromElements(tile.data.boundingSphere2D.center.z, tile.data.boundingSphere2D.center.x, tile.data.boundingSphere2D.center.y, tile.data.boundingSphere2D.center);
