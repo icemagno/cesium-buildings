@@ -7,7 +7,7 @@
  */
 
 //importScripts('../../cesium/Cesium.js');
-//importScripts('../Source/WfsGeometry.js');
+importScripts('../Source/BboxLib.js');
 //importScripts('//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js')
 
 // simple url loader in pure javascript
@@ -353,36 +353,6 @@ function geomFromWfs(type, coord, textureCoord){
     }
 }
 
-/** Store a number of tiles
- * in a hierachical maner
- * the 'tiles' are defined by the user when adding tiles
- * we look for a tile that is within an already requested
- * tile, if it exist, we look for the tile below, or we group
- * geom to create it
- * geoms are stored independently, indexed by gid
- * tiles age if they are not called, old tiles are removed along with
- * the underlying geometrie
- */
-
-function covers(first, second){
-    return first[0] <= second[0] && first[1] <= second[1] &&
-           first[2] >= second[2] && first[3] >= second[3];
-}
-
-function intersects(first, second){
-    return !(first[2] < second[0] || first[0] > second[2] 
-          || first[3] < second[1] || first[0] > second[3]);
-}
-
-function onSouthOrEast(tileBBox, bbox){
-    return (tileBBox[0] < bbox[2] && bbox[0] < tileBBox[0])
-        || (tileBBox[1] < bbox[3] && bbox[1] < tileBBox[1]);
-}
-
-function inTile(tileBBox, geom){
-    return intersects(tileBBox, geom) && !onSouthOrEast(tileBBox, geom);
-}
-
 function GeometryCache(){
     this._tiles = [];
     this._geometries = {};
@@ -390,10 +360,10 @@ function GeometryCache(){
 
 GeometryCache.prototype.get = function(tileBBox){
     var i, j;
-    console.log("we have ", this._tiles.length, " tiles");
+    //console.log("we have ", this._tiles.length, " tiles");
     for (i=0; i<this._tiles.length; i++){
         if (covers(this._tiles[i].bbox, tileBBox)){
-            console.log("found tile");
+            //console.log("found tile");
             var geoms = [];
             var gids = this._tiles[i].gids;
             var geometries = this._geometries;
@@ -422,7 +392,6 @@ GeometryCache.prototype.add = function(tileBBox, geom){
     for (i=0; i<this._tiles.length; i++){
         if (covers(this._tiles[i].bbox, tileBBox)){
             if (this._tiles[i].gids.indexOf(geom.gid) == -1){
-                console.log("adding ", geom.gid, "to tile ", i); 
                 this._geometries[geom.gid] = geomCopy(geom);
                 this._tiles[i].gids.push(geom.gid);
             }
@@ -449,7 +418,7 @@ onmessage = function(o) {
         queries[kv[0].toUpperCase()] = kv[1];
     }
 
-    console.log(o.data);
+    //console.log(o.data);
     var tileBBox = JSON.parse('['+queries['BBOX']+']');
 
     load(o.data, function(xhr) {
@@ -457,7 +426,7 @@ onmessage = function(o) {
         //console.log("loading features", geoJson.features.length);
         for (var f = 0; f < geoJson.features.length; f++) {
             var bbox = new Float32Array(4);
-            if (bbox.length == 6){
+            if (geoJson.features[f].geometry.bbox.length == 6){
                 bbox[0] = geoJson.features[f].geometry.bbox[0];
                 bbox[1] = geoJson.features[f].geometry.bbox[1];
                 bbox[2] = geoJson.features[f].geometry.bbox[3];
@@ -469,7 +438,7 @@ onmessage = function(o) {
                 bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
 
-            if (!onSouthOrEast(tileBBox, bbox)){
+            if (inTile(tileBBox, bbox)){
                 var texP = texRe.exec(geoJson.features[f].properties.tex);
                 // remove the texture from properties
                 delete geoJson.features[f].properties.tex;

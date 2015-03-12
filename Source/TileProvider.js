@@ -1,6 +1,51 @@
 /* The tile will be empty if the tile size (north->south) is below minSize or above maxsize
  */
 
+function geometryFromArrays(data){
+    var attributes = new Cesium.GeometryAttributes();
+    attributes.position  = new Cesium.GeometryAttribute({
+        componentDatatype : Cesium.ComponentDatatype.DOUBLE,
+        componentsPerAttribute : 3,
+        values : data.position
+    });
+    attributes.st  = new Cesium.GeometryAttribute({
+        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+        componentsPerAttribute : 2,
+        values : data.st
+    });
+    attributes.normal = new Cesium.GeometryAttribute({
+        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+        componentsPerAttribute : 3,
+        values : data.normal
+    });
+    /*
+    attributes.tangent = new Cesium.GeometryAttribute({
+        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+        componentsPerAttribute : 3,
+        values : data.normal
+    });
+    attributes.binormal = new Cesium.GeometryAttribute({
+        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+        componentsPerAttribute : 3,
+        values : data.normal
+    });
+    */
+    
+    var center = new Cesium.Cartesian3(data.bsphere_center[0], 
+                                       data.bsphere_center[1], 
+                                       data.bsphere_center[2]);
+    var geom = new Cesium.Geometry({
+        attributes : attributes,
+        indices : data.indices,
+        primitiveType : Cesium.PrimitiveType.TRIANGLES,
+        boundingSphere : new Cesium.BoundingSphere(center, data.bsphere_radius)
+    });
+    
+    //geom = Cesium.GeometryPipeline.computeNormal( geom );
+    //geom = Cesium.GeometryPipeline.computeBinormalAndTangent( geom );
+
+    return geom;
+}
 
 function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeMeters) {
     this._quadtree = undefined;
@@ -14,10 +59,11 @@ function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeM
 
     this._url = url;
     this._layerName = layerName;
-    this._textureBaseUrl = textureBaseUrl;
+    this._textureBaseUrl = textureBaseUrl+'/';
     this._workQueue = new WorkQueue('../Source/createWfsGeometry.js');
     this._loadedBoxes = [];
     this._cachedPrimitives = [];
+    this.nbFeatures = 0;
 };
 
 Object.defineProperties(WfsTileProvider.prototype, {
@@ -83,11 +129,13 @@ WfsTileProvider.prototype.placeHolder = function(tile, red) {
 };
 
 WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
+    var that = this;
     if (tile.state === Cesium.QuadtreeTileLoadState.START) {
         tile.data = {
             primitive: new Cesium.PrimitiveCollection(),
             freeResources: function() {
                 if (Cesium.defined(this.primitive)) {
+                    that.nbFeatures -= this.primitive.length;
                     //this.primitive.destroy();
                     this.primitive = undefined;
                 }
@@ -107,10 +155,12 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
 
         if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
             this.placeHolder(tile);
-            this.prepareTile(tile, context, frameState);
+            this.nbFeatures +=1;
+            this.prepareTile(tile, context, frameState, this.nbFeatures);
 
         } else {
             this.placeHolder(tile);
+            this.nbFeatures +=1;
             tile.data.primitive.update(context, frameState, []);
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
@@ -152,26 +202,7 @@ WfsTileProvider.prototype.destroy = function() {
     return Cesium.destroyObject(this);
 };
 
-function covers(first, second){
-    return first[0] <= second[0] && first[1] <= second[1] &&
-           first[2] >= second[2] && first[3] >= second[3];
-}
-
-function intersects(first, second){
-    return !(first[2] < second[0] || first[0] > second[2] 
-          || first[3] < second[1] || first[0] > second[3]);
-}
-
-function onSouthOrEast(tileBBox, bbox){
-    return (tileBBox[0] <= bbox[2] && bbox[0] <= tileBBox[0])
-        || (tileBBox[1] <= bbox[3] && bbox[1] <= tileBBox[1]);
-}
-
-function inTile(tileBBox, geom){
-    return intersects(tileBBox, geom) && !onSouthOrEast(tileBBox, geom);
-}
-
-WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
+WfsTileProvider.prototype.prepareTile = function(tile, context, frameState, nbFeatures){
     tile.state = Cesium.QuadtreeTileLoadState.LOADING;
 
     var bbox = [DEGREES_PER_RADIAN * tile.rectangle.west,
@@ -182,13 +213,33 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
     var boxes = this.boxes(bbox);
     //console.log(this._cachedPrimitives.length, " cached primitives");
 
-    console.log(boxes.needed.length, " needed boxes");
+    //console.log(boxes.needed.length, " needed boxes ", this._cachedPrimitives.length, " features in cache ");
     if (boxes.available.length){
         // get cached primitives
         var cached = this._cachedPrimitives;
         for (var p=0; p<cached.length; p++){
-            if (inTile(bbox, cached[p].bbox)) tile.data.primitive.add(cached[p].primitive);
+            if (inTile(bbox, cached[p].bbox)){
+
+                tile.data.primitive.add(cached[p].primitive);
+                
+                var color = Cesium.Color.fromBytes(0, 255, 0, 64);
+                //console.log(cached[p].bbox);
+                //tile.data.primitive.add( new Cesium.Primitive({
+                //    geometryInstances: new Cesium.GeometryInstance({
+                //        geometry: new Cesium.RectangleOutlineGeometry({
+                //            rectangle: new Cesium.Rectangle.fromDegrees(cached[p].bbox[0], cached[p].bbox[1], cached[p].bbox[2], cached[p].bbox[3])
+                //        }),
+                //        attributes: {
+                //            color: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
+                //        }
+                //    }),
+                //    appearance: new Cesium.PerInstanceColorAppearance({
+                //        flat: true
+                //    })
+                //}));
+            }
         }
+        //console.log(nbFeatures, 'features');
     }
 
     var nbOfLoadeBoxed = 0;
@@ -207,6 +258,8 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
             if (typeof tile.data.primitive == 'undefined'){
                 // tile suppressed while we waited for reply
                 // receive messages from worker until done
+                tile.state = Cesium.QuadtreeTileLoadState.DONE;
+                tile.renderable = false;
                 return w.data != 'done';
             }
             if (w.data != 'done'){
@@ -224,7 +277,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
                         geometry: geometryFromArrays(w.data)
                     }),
                     appearance : new Cesium.MaterialAppearance({
-                        //material : mat,
+                        material : mat,
                         faceForward : true
                       }),
                     asynchronous : false
@@ -233,6 +286,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
                 that._cachedPrimitives.push({bbox:w.data.bbox, primitive:prim});
 
                 tile.data.primitive.add(prim);
+                nbFeatures+=2;
 
                 return true;
             }
@@ -242,6 +296,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
                 tile.state = Cesium.QuadtreeTileLoadState.DONE;
                 tile.renderable = true;
                 that.boxLoaded(bbox);
+                //console.log(nbFeatures, 'features');
             }
             return false;
         });

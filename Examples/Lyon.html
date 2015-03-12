@@ -9,8 +9,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
   <title>Lyon buildings demo</title>
   <script src="../../cesium/Cesium.js"></script>
+  <script src="../Source/BboxLib.js"></script>
   <script src="../Source/WorkQueue.js"></script>
-  <script src="../Source/TileCache.js"></script>
+  <!--script src="../Source/TileCache.js"--></script>
   <!--script src="../Source/WfsGeometry.js"></script-->
   <script src="../Source/TileProvider.js"></script>
   <style>
@@ -201,7 +202,7 @@ if(1){
                            'http://localhost/cgi-bin/tinyows', 
                            'tows:textured_citygml_lat_long', 
                            'http://localhost/w/textures',
-                           0, 10000)
+                           0, 1000)
     }));
 
     // antialiasing please
