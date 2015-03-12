@@ -420,17 +420,37 @@ onmessage = function(o) {
 
     //console.log(o.data);
     var tileBBox = JSON.parse('['+queries['BBOX']+']');
+    var extent = [4.84068822860718, 45.7541275024414, 4.86542463302612, 45.7636680603027];
+    
+    if (!intersects(extent, tileBBox)){
+        postMessage('done');
+        return;
+    }
+
 
     load(o.data, function(xhr) {
         var geoJson = JSON.parse(xhr.responseText);
         //console.log("loading features", geoJson.features.length);
         for (var f = 0; f < geoJson.features.length; f++) {
             var bbox = new Float32Array(4);
+            //var ctr = new Float32Array(3);
             if (geoJson.features[f].geometry.bbox.length == 6){
                 bbox[0] = geoJson.features[f].geometry.bbox[0];
                 bbox[1] = geoJson.features[f].geometry.bbox[1];
                 bbox[2] = geoJson.features[f].geometry.bbox[3];
                 bbox[3] = geoJson.features[f].geometry.bbox[4];
+
+                //var wsb = cartesianFromDregree(geoJson.features[f].geometry.bbox[0],
+                //                                geoJson.features[f].geometry.bbox[1],
+                //                                geoJson.features[f].geometry.bbox[2]);
+                //var ent = cartesianFromDregree(geoJson.features[f].geometry.bbox[3],
+                //                                geoJson.features[f].geometry.bbox[4],
+                //                                geoJson.features[f].geometry.bbox[5]);
+                //console.log(geoJson.features[f].geometry.bbox);
+                //ctr[0] = .5*(wsb[0]+ent[0]); 
+                //ctr[1] = .5*(wsb[1]+ent[1]); 
+                //ctr[1] = .5*(wsb[2]+ent[2]); 
+
             } else {
                 bbox[0] = geoJson.features[f].geometry.bbox[0];
                 bbox[1] = geoJson.features[f].geometry.bbox[1];
@@ -453,6 +473,10 @@ onmessage = function(o) {
                 geom.properties = JSON.stringify(geoJson.features[f].properties);
                 geom.bbox = bbox;
                 geom.gid = geoJson.features[f].properties.gid;
+                //console.log(geom.bsphere_center, ctr);
+                //geom.bsphere_center = ctr; //DEBUG
+
+
 
                 try {
                 postMessage( 

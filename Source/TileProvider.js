@@ -18,18 +18,17 @@ function geometryFromArrays(data){
         componentsPerAttribute : 3,
         values : data.normal
     });
-    /*
-    attributes.tangent = new Cesium.GeometryAttribute({
-        componentDatatype : Cesium.ComponentDatatype.FLOAT,
-        componentsPerAttribute : 3,
-        values : data.normal
-    });
-    attributes.binormal = new Cesium.GeometryAttribute({
-        componentDatatype : Cesium.ComponentDatatype.FLOAT,
-        componentsPerAttribute : 3,
-        values : data.normal
-    });
-    */
+
+//    attributes.tangent = new Cesium.GeometryAttribute({
+//        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+//        componentsPerAttribute : 3,
+//        values : data.normal
+//    });
+//    attributes.binormal = new Cesium.GeometryAttribute({
+//        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+//        componentsPerAttribute : 3,
+//        values : data.normal
+//    });
     
     var center = new Cesium.Cartesian3(data.bsphere_center[0], 
                                        data.bsphere_center[1], 
@@ -135,7 +134,6 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
             primitive: new Cesium.PrimitiveCollection(),
             freeResources: function() {
                 if (Cesium.defined(this.primitive)) {
-                    that.nbFeatures -= this.primitive.length;
                     //this.primitive.destroy();
                     this.primitive = undefined;
                 }
@@ -154,14 +152,14 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
                                        tile.data.boundingSphere2D.center);
 
         if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
-            this.placeHolder(tile);
-            this.nbFeatures +=1;
+            //this.placeHolder(tile);
+            //this.nbFeatures +=1;
             this.prepareTile(tile, context, frameState, this.nbFeatures);
 
         } else {
-            this.placeHolder(tile);
+            //this.placeHolder(tile);
             this.nbFeatures +=1;
-            tile.data.primitive.update(context, frameState, []);
+            //tile.data.primitive.update(context, frameState, []);
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
         }
@@ -222,7 +220,19 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState, nbFe
 
                 tile.data.primitive.add(cached[p].primitive);
                 
-                var color = Cesium.Color.fromBytes(0, 255, 0, 64);
+                //var geometry = Cesium.GeometryPipeline.createLineSegmentsForVectors(cached[p].primitive.geometryInstances.geometry, 'normal', 100.0);
+
+                //var color = Cesium.Color.fromBytes(0, 255, 0, 64);
+                //console.log(cached[p].bbox);
+                //tile.data.primitive.add( new Cesium.Primitive({
+                //    geometryInstances: new Cesium.GeometryInstance({
+                //        geometry: geometry
+                //    }),
+                //    appearance: new Cesium.PolylineColorAppearance(),
+                //    asynchronous : false
+                //}));
+
+                //var color = Cesium.Color.fromBytes(0, 255, 0, 64);
                 //console.log(cached[p].bbox);
                 //tile.data.primitive.add( new Cesium.Primitive({
                 //    geometryInstances: new Cesium.GeometryInstance({
@@ -263,25 +273,40 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState, nbFe
                 return w.data != 'done';
             }
             if (w.data != 'done'){
+                var props = JSON.parse(w.data.properties);
+
                 var mat = new Cesium.Material({
                     fabric : {
                         type : 'DiffuseMap',
-                        uniforms : {
-                            image : that._textureBaseUrl+w.data.texture
-                            //color : '#FFFFFF'
+                        components : {
+                            diffuse :  w.data.gid%2 ? 'vec3(.7,.3,0)' : 'vec3(1,.5,0)',
+                            specular : '0.1'
                         }
+                        //type : 'DiffuseMap',
+                        //uniforms : {
+                        //    image : that._textureBaseUrl+w.data.texture
+                        //}
+                        //,
+                        //components : {
+                        //    diffuse : 'texture2D(image, materialInput.st).rgb',
+                        //    specular : '0.1'
+                        //}
                     }
                 });
                 var prim = new Cesium.Primitive({
                     geometryInstances: new Cesium.GeometryInstance({
                         geometry: geometryFromArrays(w.data)
                     }),
+                    //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
                         material : mat,
-                        faceForward : true
+                        faceForward : false,
+                        closed : false
                       }),
                     asynchronous : false
                 });
+                prim.gid = w.data.gid;
+                prim.properties = props;
 
                 that._cachedPrimitives.push({bbox:w.data.bbox, primitive:prim});
 
