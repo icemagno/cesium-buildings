@@ -212,7 +212,6 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
         var cached = this._cachedPrimitives;
         for (var p=0; p<cached.length; p++){
             if (inTile(bbox, cached[p].bbox)){
-
                 tile.data.primitive.add(cached[p].primitive);
             }
         }
