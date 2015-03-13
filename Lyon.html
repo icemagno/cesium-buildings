@@ -38,6 +38,7 @@
 <body>
   <div id="cesiumContainer"></div>
   <div id="uiMenu">
+    <button type="button" onclick="toggleThematic()">toggle thematic coloring</button> 
     <button type="button" onclick="toggleHighlight()">toggle highlight on mouseover</button> 
     <button type="button" onclick="toggleOsm()">toggle OSM background</button> 
   </div>
@@ -59,16 +60,45 @@
     viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
     // Tiler
-    viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({
-        tileProvider : new WfsTileProvider(
+    var tileProvider = new WfsTileProvider(
                            'http://localhost/cgi-bin/tinyows', 
                            'tows:textured_citygml_lat_long', 
                            'http://localhost/w/textures',
-                           0, 10000)
-    }));
+                           0, 1000);
+    viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 
     // antialiasing please
     viewer.scene.fxaa = true;
+
+    var thematicOn = false;
+    function toggleThematic(){
+        if (!thematicOn){
+            tileProvider.setMaterialFunction(function(properties){
+                return new Cesium.Material({
+                    fabric : {
+                        type : 'DiffuseMap',
+                        components : {
+                            diffuse :  properties.gid%2 ? 'vec3(.7,.3,0)' : 'vec3(1,.5,0)',
+                            specular : '0.1'
+                        }
+                    }
+                });
+            });
+            thematicOn = true;
+        } else {
+            tileProvider.setMaterialFunction(function(properties){
+                return new Cesium.Material({
+                    fabric : {
+                        type : 'DiffuseMap',
+                        uniforms : {
+                            image :  'http://localhost/w/textures'+'/'+properties.tex.url
+                        }
+                    }
+                });
+            });
+            thematicOn = false;
+        }
+    }
 
     var osmLayer;
     function toggleOsm(){
@@ -85,11 +115,8 @@
 
     var handler;
     function toggleHighlight(){
-        var restoreApearance;
-        var restorePrimitive;
-
+        var restore;
         if (!Cesium.defined(handler)){
-            console.log('pick on');
             // If the mouse is over a feature, change its color to yellow
             var pickingInProgress = false;
             handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -99,22 +126,22 @@
                 var pickedObject = viewer.scene.pick(movement.endPosition);
                 if (Cesium.defined(pickedObject) 
                     && Cesium.defined(pickedObject.primitive) 
-                    && Cesium.defined(pickedObject.primitive.gid) ) {
+                    && Cesium.defined(pickedObject.primitive.properties) ) {
 
-                    if (pickedObject.primitive != restorePrimitive){
-                        if (Cesium.defined(restorePrimitive)){
-                            restorePrimitive.appearance = restoreApearance;
+                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive){
+                        if (Cesium.defined(restore)){
+                            restore.primitive.appearance = restore.appearance;
                         }
-                        restorePrimitive = pickedObject.primitive;
-                        restoreApearance = pickedObject.primitive.appearance;
+                        restore = {
+                            primitive:pickedObject.primitive, 
+                            appearance:pickedObject.primitive.appearance
+                        };
 
-                        //console.log(pickedObject);
                         var mat = new Cesium.Material({
                             fabric : {
                                 type : 'DiffuseMap',
                                 components : {
                                     diffuse : 'vec3(1.,1.,0)',
-                                    specular : '0.1',
                                     alpha : '1.'
                                 }
                             }
@@ -127,20 +154,17 @@
                     }
 
                 } else {
-                    if (Cesium.defined(restorePrimitive)){
-                        restorePrimitive.appearance = restoreApearance;
-                        restoreApearance = undefined;
-                        restorePrimitive = undefined
+                    if (Cesium.defined(restore)){
+                        restore.primitive.appearance = restore.appearance;
+                        restore = undefined;
                     }
                 }
                 pickingInProgress = false;
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         } else {
-            console.log('pick off');
-            if (Cesium.defined(restorePrimitive)){
-                restorePrimitive.appearance = restoreApearance;
+            if (Cesium.defined(restore)){
+                restore.primitive.appearance = restore.appearance;
                 restoreApearance = undefined;
-                restorePrimitive = undefined
             }
             handler.destroy();
             handler = undefined;

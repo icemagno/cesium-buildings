@@ -62,10 +62,20 @@ function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeM
 
     this._url = url;
     this._layerName = layerName;
-    this._textureBaseUrl = textureBaseUrl+'/';
+    //this._textureBaseUrl = textureBaseUrl+'/';
     this._workQueue = new WorkQueue('js/createWfsGeometry.js');
     this._loadedBoxes = [];
     this._cachedPrimitives = [];
+    this._materialFunction = function(properties){
+        return new Cesium.Material({
+                fabric : {
+                    type : 'DiffuseMap',
+                    uniforms : {
+                        image : textureBaseUrl+'/'+properties.tex.url
+                    }
+                }
+        });
+    };
 }
 
 Object.defineProperties(WfsTileProvider.prototype, {
@@ -238,39 +248,19 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
                 return w.data != 'done';
             }
             if (w.data != 'done'){
-                var props = JSON.parse(w.data.properties);
 
-                var mat = new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        //components : {
-                        //    diffuse :  w.data.gid%2 ? 'vec3(.7,.3,0)' : 'vec3(1,.5,0)',
-                        //    specular : '0.1'
-                        //}
-                        uniforms : {
-                            image : that._textureBaseUrl+w.data.texture
-                        }
-                        //,
-                        //components : {
-                        //    diffuse : 'texture2D(image, materialInput.st).rgb',
-                        //    specular : '0.1'
-                        //}
-                    }
-                });
+                var properties = JSON.parse(w.data.properties)
                 var prim = new Cesium.Primitive({
                     geometryInstances: new Cesium.GeometryInstance({
                         geometry: geometryFromArrays(w.data)
                     }),
                     //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
-                        material : mat,
-                        faceForward : false,
-                        closed : false
-                      }),
+                        material : that._materialFunction(properties)
+                    }),
                     asynchronous : false
                 });
-                prim.gid = w.data.gid;
-                prim.properties = props;
+                prim.properties = properties;
                 that._cachedPrimitives.push({bbox:w.data.bbox, primitive:prim});
                 tile.data.primitive.add(prim);
                 return true;
@@ -345,5 +335,19 @@ WfsTileProvider.prototype.boxLoaded = function(bbox){
     }
     loadedBoxes.push(bbox);
 };
+
+/* the function must return a material to be applied to each feature
+ * the function recieve one parameter which is the feature attributes
+ */
+WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
+    this._materialFunction = materialFunction;
+    var cached = this._cachedPrimitives;
+    // update cached primitives
+    for (var p=0; p<cached.length; p++){
+        cached[p].primitive.appearance = new Cesium.MaterialAppearance({
+            material : materialFunction(cached[p].primitive.properties) 
+        });
+    }
+}
 
 

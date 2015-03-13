@@ -267,9 +267,9 @@ onmessage = function(o) {
 
             if (inTile(tileBBox, bbox)){
                 var texP = texRe.exec(geoJson.features[f].properties.tex);
-                // remove the texture from properties
+                // remove the texture uv from properties
                 // because we put it in the geometry
-                delete geoJson.features[f].properties.tex;
+                geoJson.features[f].properties.tex = {url:texP[1]};
                 var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
                 var st = JSON.parse(arrJson);
                 var coord = geoJson.features[f].geometry.coordinates;
@@ -278,7 +278,6 @@ onmessage = function(o) {
                 var geom = geomFromWfs(type, coord, st);
                 
                 // add attributes
-                geom.texture = texP[1];
                 geom.properties = JSON.stringify(geoJson.features[f].properties);
                 geom.bbox = bbox;
                 geom.gid = geoJson.features[f].properties.gid;
