@@ -1,0 +1,13 @@
+Cesium-buildings Contributors guide
+===================================
+
+Pull requests are welcome !
+
+To contribute to Cesium-buildings please :
+- Open issues for the work you want to achieve
+- Fork the repository
+- Provide a pull request
+
+As for the code guidelines, please follow the Cesium guidelines :
+https://github.com/AnalyticalGraphicsInc/cesium/blob/master/CONTRIBUTING.md
+
