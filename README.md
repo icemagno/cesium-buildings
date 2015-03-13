@@ -46,6 +46,18 @@ Roadmap
 - [ ] LOD for geometries
 - [ ] LOD for textures (with IIP server)
 
+Contributors
+------------
 
+- Vincent Mora <vincent.mora@oslandia.com> (Oslandia)
 
+Thank you
+---------
+
+Thanks to Grand Lyon for releasing their 3D models as open data.
+
+Licence
+-------
+
+This work is released under the LGPL v2.1 or later licence. See LICENSE file.
 
