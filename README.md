@@ -40,11 +40,11 @@ Here will soon be the description of the 3D format expected from the WFS server.
 Roadmap
 -------
 
-[] WFS format documentation
-[] Improve performances
-[] Object packing
-[] LOD for geometries
-[] LOD for textures (with IIP server)
+- [ ] WFS format documentation
+- [ ] Improve performances
+- [ ] Object packing
+- [ ] LOD for geometries
+- [ ] LOD for textures (with IIP server)
 
 
 
