@@ -129,13 +129,19 @@ function geomFromWfsTin(coord, textureCoord){
     // set position and compute 3D centroid
     for (i=0, t=0; t<coord.length; t++){
         for (v = 0; v < 3; v++, i+=3){
-            var p = cartesianFromDregree(coord[t][0][v][0], 
+            /*var p = cartesianFromDregree(coord[t][0][v][0], 
                                          coord[t][0][v][1], 
                                          coord[t][0][v][2]);
             position[i] = p[0];
             position[i+1] = p[1];
             position[i+2] = p[2];
-            centroid = plus(centroid, p);
+            plus(centroid, p);*/
+            position[i] = coord[t][0][v][0];
+            position[i+1] = coord[t][0][v][1];
+            position[i+2] = coord[t][0][v][2];
+            centroid[0] += position[i];
+            centroid[1] += position[i+1];
+            centroid[2] += position[i+2];
         }
     }
     centroid = mult(centroid, 3.0/position.length);

@@ -87,6 +87,29 @@ console.log(points_4326);
 
 var pCesium = new Cesium.Cartesian3.fromDegrees(4.859421, 45.779551, 0);
 
+
+var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
+
+// set the view of Lyon
+var extent = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
+viewer.camera.viewRectangle(extent);
+
+var texture_dir = "../w/textures/"
+
+// terrain
+viewer.scene.globe.depthTestAgainstTerrain = true;
+var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
+    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
+});
+viewer.terrainProvider = cesiumTerrainProviderMeshes;
+
+// Tiler
+var tileProvider = new WfsTileProvider(
+                       'http://localhost/cgi-bin/tinyows', 
+                       'tows:textured_citygml', 
+                       'http://localhost/w/textures',
+                       0, 1000, viewer);
+viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 /*
 var viewer = new Cesium.Viewer('cesiumContainer');
 var extent = new Cesium.Rectangle.fromDegrees(4.833447,45.767639, 4.865213, 45.782010);

@@ -51,7 +51,8 @@ function geometryFromArrays(data){
 
 /* The tile will be empty if the tile size (north->south) is below minSize or above maxsize
  */
-function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeMeters){
+function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeMeters, viewer){
+    this._viewer = viewer;
     this._quadtree = undefined;
     this._tilingScheme = new Cesium.GeographicTilingScheme();
     this._errorEvent = new Cesium.Event();
@@ -212,10 +213,19 @@ WfsTileProvider.prototype.destroy = function() {
 WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
     tile.state = Cesium.QuadtreeTileLoadState.LOADING;
 
-    var bbox = [DEGREES_PER_RADIAN * tile.rectangle.west,
-                DEGREES_PER_RADIAN * tile.rectangle.south,
-                DEGREES_PER_RADIAN * tile.rectangle.east,
-                DEGREES_PER_RADIAN * tile.rectangle.north];
+    var bboxll = [DEGREES_PER_RADIAN * tile.rectangle.west,
+                  DEGREES_PER_RADIAN * tile.rectangle.south,
+                  DEGREES_PER_RADIAN * tile.rectangle.east,
+                  DEGREES_PER_RADIAN * tile.rectangle.north];
+    var ws = [bboxll[0], bboxll[1]];
+    var en = [bboxll[2], bboxll[3]];
+    ws = proj4('EPSG:4326','EPSG:3946').forward(ws);
+    en = proj4('EPSG:4326','EPSG:3946').forward(en);
+    var bbox = [ws[0],
+                ws[1],
+                en[0],
+                en[1]];
+
     var boxes = this.boxes(bbox);
     if (boxes.available.length){
         // get cached primitives
@@ -227,6 +237,61 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
         }
     }
 
+    // matrix
+    // triangle tile
+    var pt1local = new Cesium.Cartesian3(bbox[0], bbox[1], 0);
+    var pt2local = new Cesium.Cartesian3(bbox[2], bbox[1], 0);
+    var pt3local = new Cesium.Cartesian3(bbox[0], bbox[3], 0);
+
+    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], 0);
+    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], 0);
+    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], 0);
+
+    // translation lambert -> lambert originie en pt1
+    var t0 = new Cesium.Cartesian3(-bbox[0], -bbox[1], 0);
+
+    // définition de la transformation
+    var t = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], 50, this._viewer.ellipsoid);
+
+    //var m = Cesium.Matrix4.fromRotationTranslation(r,t);
+    var m = Cesium.Matrix4.fromTranslation(t);
+
+
+    var u = new Cesium.Cartesian3();
+    var v = new Cesium.Cartesian3();
+    var w = new Cesium.Cartesian3();
+    Cesium.Cartesian3.subtract(pt2local, pt1local, u);
+    Cesium.Cartesian3.subtract(pt3local, pt1local, v);
+    Cesium.Cartesian3.cross(u,v,w);
+
+    var up = new Cesium.Cartesian3();
+    var vp = new Cesium.Cartesian3();
+    var wp = new Cesium.Cartesian3();
+    Cesium.Cartesian3.subtract(pt2cart, pt1cart, up);
+    Cesium.Cartesian3.subtract(pt3cart, pt1cart, vp);
+    Cesium.Cartesian3.cross(up,vp,wp);
+
+    var U = new Cesium.Matrix3(u.x,v.x,w.x,
+                              u.y,v.y,w.y,
+                              u.z,v.z,w.z);
+
+    var Up = new Cesium.Matrix3(up.x,vp.x,wp.x,
+                              up.y,vp.y,wp.y,
+                              up.z,vp.z,wp.z);
+
+    var Uinv = new Cesium.Matrix3();
+    Cesium.Matrix3.inverse(U, Uinv);
+
+    var M = new Cesium.Matrix3();
+    Cesium.Matrix3.multiply(Up, Uinv, M);
+
+    Cesium.Matrix4.multiplyByMatrix3(m, M, m);
+
+    var M2 = new Cesium.Matrix4();
+    Cesium.Matrix4.fromTranslation(t0, M2);
+    Cesium.Matrix4.multiply(m, M2, m);
+
+
     var nbOfLoadeBoxed = 0;
     var that = this;
     for (var b=0; b<boxes.needed.length; b++){
@@ -236,7 +301,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
                 '&REQUEST=GetFeature'+
                 '&outputFormat=JSON'+
                 '&typeName='+this._layerName+
-                '&srsName=EPSG:4326'+
+                '&srsName=EPSG:3946'+   // en dur pour le test
                 '&BBOX='+boxes.needed[b].join(',');
 
         this._workQueue.addTask(request, function(w){
@@ -249,8 +314,9 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
             }
             if (w.data != 'done'){
 
-                var properties = JSON.parse(w.data.properties)
+                var properties = JSON.parse(w.data.properties);
                 var prim = new Cesium.Primitive({
+                    modelMatrix : m,
                     geometryInstances: new Cesium.GeometryInstance({
                         geometry: geometryFromArrays(w.data)
                     }),
