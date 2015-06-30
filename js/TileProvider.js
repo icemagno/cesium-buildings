@@ -210,50 +210,21 @@ WfsTileProvider.prototype.destroy = function() {
     return Cesium.destroyObject(this);
 };
 
-WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
-    tile.state = Cesium.QuadtreeTileLoadState.LOADING;
+WfsTileProvider.prototype.computeMatrix = function(localPtList, cartesianPtList) {
+    var pt1local = localPtList[0];
+    var pt2local = localPtList[1];
+    var pt3local = localPtList[2];
 
-    var bboxll = [DEGREES_PER_RADIAN * tile.rectangle.west,
-                  DEGREES_PER_RADIAN * tile.rectangle.south,
-                  DEGREES_PER_RADIAN * tile.rectangle.east,
-                  DEGREES_PER_RADIAN * tile.rectangle.north];
-    var ws = [bboxll[0], bboxll[1]];
-    var en = [bboxll[2], bboxll[3]];
-    ws = proj4('EPSG:4326','EPSG:3946').forward(ws);
-    en = proj4('EPSG:4326','EPSG:3946').forward(en);
-    var bbox = [ws[0],
-                ws[1],
-                en[0],
-                en[1]];
-
-    var boxes = this.boxes(bbox);
-    if (boxes.available.length){
-        // get cached primitives
-        var cached = this._cachedPrimitives;
-        for (var p=0; p<cached.length; p++){
-            if (inTile(bbox, cached[p].bbox)){
-                tile.data.primitive.add(cached[p].primitive);
-            }
-        }
-    }
-
-    // matrix
-    // triangle tile
-    var pt1local = new Cesium.Cartesian3(bbox[0], bbox[1], 0);
-    var pt2local = new Cesium.Cartesian3(bbox[2], bbox[1], 0);
-    var pt3local = new Cesium.Cartesian3(bbox[0], bbox[3], 0);
-
-    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], 0);
-    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], 0);
-    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], 0);
+    var pt1cart = cartesianPtList[0];
+    var pt2cart = cartesianPtList[1];
+    var pt3cart = cartesianPtList[2];
 
     // translation lambert -> lambert originie en pt1
-    var t0 = new Cesium.Cartesian3(-bbox[0], -bbox[1], 0);
+    var t0 = new Cesium.Cartesian3(-pt1local.x, -pt1local.y, 0);
 
     // définition de la transformation
-    var t = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], 50, this._viewer.ellipsoid);
+    var t = pt1cart;
 
-    //var m = Cesium.Matrix4.fromRotationTranslation(r,t);
     var m = Cesium.Matrix4.fromTranslation(t);
 
 
@@ -291,6 +262,121 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState){
     Cesium.Matrix4.fromTranslation(t0, M2);
     Cesium.Matrix4.multiply(m, M2, m);
 
+    return m;
+};
+
+var DEBUG_POINTS = false;
+
+WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
+    tile.state = Cesium.QuadtreeTileLoadState.LOADING;
+
+    var bboxll = [DEGREES_PER_RADIAN * tile.rectangle.west,
+                  DEGREES_PER_RADIAN * tile.rectangle.south,
+                  DEGREES_PER_RADIAN * tile.rectangle.east,
+                  DEGREES_PER_RADIAN * tile.rectangle.north];
+    var ws = [bboxll[0], bboxll[1]];
+    var wn = [bboxll[0], bboxll[3]];
+    var en = [bboxll[2], bboxll[3]];
+    var es = [bboxll[2], bboxll[1]];
+    ws = proj4('EPSG:4326','EPSG:3946').forward(ws);
+    en = proj4('EPSG:4326','EPSG:3946').forward(en);
+    wn = proj4('EPSG:4326','EPSG:3946').forward(wn);
+    es = proj4('EPSG:4326','EPSG:3946').forward(es);
+    var bbox = [ws[0],
+                ws[1],
+                en[0],
+                en[1]]; // techniquement faux, ce n'est pas une bb carrée
+
+
+    // matrix
+    // triangle tile
+    var pt1local = new Cesium.Cartesian3(ws[0], ws[1], 0);
+    var pt2local = new Cesium.Cartesian3(es[0], es[1], 0);
+    var pt3local = new Cesium.Cartesian3(wn[0], wn[1], 0);
+    var pt4local = new Cesium.Cartesian3(en[0], en[1], 0);
+
+    var localArray = [pt1local, pt2local, pt3local];
+    var localArray2 = [pt4local, pt2local, pt3local];
+
+    var deltaZ = 55;    // cesium terrain elevation does not match our data elevation
+
+    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], deltaZ);
+    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], deltaZ);
+    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], deltaZ);
+    var pt4cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[3], deltaZ);
+
+    //console.log(Cesium.Cartesian3.distance(pt1cart, pt3cart));
+    var cartesianArray = [pt1cart, pt2cart, pt3cart];
+    var cartesianArray2 = [pt4cart, pt2cart, pt3cart];
+
+    var m = this.computeMatrix(localArray, cartesianArray);
+    var m2 = this.computeMatrix(localArray2, cartesianArray2);
+
+    if(DEBUG_POINTS)
+    {
+        var width = Cesium.Cartesian3.distance(pt1local, pt2local);
+        var height = Cesium.Cartesian3.distance(pt1local, pt3local);
+        var nbOfPointsOnOneSide = 5;
+
+        // seed points
+        var points_3946 = [];
+        var points_4326 = [];
+        var vectX = new Cesium.Cartesian3();
+        var vectY = new Cesium.Cartesian3();
+        Cesium.Cartesian3.subtract(pt2local, pt1local, vectX);
+        Cesium.Cartesian3.subtract(pt3local, pt1local, vectY);
+        Cesium.Cartesian3.divideByScalar(vectX, nbOfPointsOnOneSide, vectX);
+        Cesium.Cartesian3.divideByScalar(vectY, nbOfPointsOnOneSide, vectY);
+        for (var j=0; j<=nbOfPointsOnOneSide; j++){
+            for (var k=0; k<=nbOfPointsOnOneSide; k++){
+                var pt_3946 = new Cesium.Cartesian3(pt1local.x, pt1local.y, 300);
+                var vectX2 = new Cesium.Cartesian3();
+                var vectY2 = new Cesium.Cartesian3();
+                Cesium.Cartesian3.multiplyByScalar(vectX, k, vectX2);
+                Cesium.Cartesian3.multiplyByScalar(vectY, j, vectY2);
+                Cesium.Cartesian3.add(pt_3946, vectX2, pt_3946);
+                Cesium.Cartesian3.add(pt_3946, vectY2, pt_3946);
+                var arrayPt = [pt_3946.x, pt_3946.y];
+                var arrayPt4326 = proj4('EPSG:3946','EPSG:4326').forward( arrayPt );
+                var pt_4326 = new Cesium.Cartesian3.fromDegrees(arrayPt4326[0], arrayPt4326[1], 300 + deltaZ);
+                points_4326.push(pt_4326);
+
+                Cesium.Matrix4.multiplyByPoint(m, pt_3946, pt_3946);
+                points_3946.push( pt_3946 );
+            }
+        }
+
+        for(var debug_pt = 0; debug_pt < points_3946.length; debug_pt++)
+        {
+            viewer.entities.add({
+                position : points_4326[debug_pt],
+                point : {
+                    show : true, // default
+                    color : Cesium.Color.RED, // default: WHITE
+                    pixelSize : 5 // default: 1
+                }
+            });
+            viewer.entities.add({
+                position : points_3946[debug_pt],
+                point : {
+                    show : true, // default
+                    color : Cesium.Color.SKYBLUE, // default: WHITE
+                    pixelSize : 5 // default: 1
+                }
+            });
+        }
+    }
+
+    var boxes = this.boxes(bbox);
+    if (boxes.available.length){
+        // get cached primitives
+        var cached = this._cachedPrimitives;
+        for (var p=0; p<cached.length; p++){
+            if (inTile(bbox, cached[p].bbox)){
+                tile.data.primitive.add(cached[p].primitive);
+            }
+        }
+    }
 
     var nbOfLoadeBoxed = 0;
     var that = this;
