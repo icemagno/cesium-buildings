@@ -173,6 +173,9 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
         }
+        if(this._minSizeMeters >= tileSizeMeters) {
+            tile.renderable = false;
+        }
     }
 };
 
