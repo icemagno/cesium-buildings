@@ -9,6 +9,7 @@
  */
 
 importScripts('BboxLib.js');
+importScripts('../thirdparty/earcut.js');
 
 /* Simple url loader in pure javascript
  */
@@ -219,19 +220,192 @@ function geomFromWfsTin(coord, textureCoord){
     };
 }
 
+/* Converts a PolyhedralSurface
+ * to typed arrays. The result is a triangle soup.
+ * Also compute normals
+ *
+ * TODO: debug tangent and binormals.
+ */ 
+function geomFromWfsPolyhedralSurface(coord, textureCoord){
+    var t,v,i,j;
+    var U, V, N, Utex, Vtex;
+    var nrm;
+    var nIndices = 0;
+    for (t = 0; t < coord.length; t++) {
+        nIndices += coord[t][0].length - 2;
+    }
+    var indices = new Uint16Array(3*nIndices);// triangle soup 
+    var position = new Float64Array(3*indices.length);
+    var normal = new Float32Array(position.length);
+    var tangent = new Float32Array(position.length);
+    var binormal = new Float32Array(position.length);
+    var st = new Float32Array((position.length/3)*2);
+    var centroid = [0,0,0];
+    var radius = 0;
+    var center = new Float32Array(3);
+    
+    for (i=0; i<indices.length; i++) indices[i] = i;
+
+    // set position and compute 3D centroid
+    for (i=0, t=0; t<coord.length; t++){
+        var delta = 0;
+        var positionPolygon = [];
+        var positionPolygon1 = [];
+        var positionPolygon2 = [];
+        var positionPolygon3 = [];
+        
+        for (v = 0; v < coord[t][0].length; v++){
+            var duplicate = false;
+            // removing duplicate points
+            for(j = 0; j < positionPolygon.length; j+=3) {
+                if(coord[t][0][v][0] == positionPolygon[j] &&
+                   coord[t][0][v][1] == positionPolygon[j+1] &&
+                   coord[t][0][v][2] == positionPolygon[j+2]) {
+                    duplicate = true;
+                }
+            }
+            if(duplicate) {
+                delta++;
+                continue;
+            }
+            positionPolygon[3 * (v - delta)] = coord[t][0][v][0];
+            positionPolygon[3 * (v - delta) + 1] = coord[t][0][v][1];
+            positionPolygon[3 * (v - delta) + 2] = coord[t][0][v][2];
+            positionPolygon1[2 * (v - delta)] = coord[t][0][v][0];
+            positionPolygon1[2 * (v - delta) + 1] = coord[t][0][v][1];
+            positionPolygon2[2 * (v - delta)] = coord[t][0][v][0];
+            positionPolygon2[2 * (v - delta) + 1] = coord[t][0][v][2];
+            positionPolygon3[2 * (v - delta)] = coord[t][0][v][1];
+            positionPolygon3[2 * (v - delta) + 1] = coord[t][0][v][2];
+        }
+        // removing some of the degenerated polyogns (2 points or less)
+        if(positionPolygon.length < 9) continue;
+        // triangulation of the polygon projected on planes (xy) (zx) and (yz)
+        // triangulation with the most points is the correct one
+        var triangles1 = earcut(positionPolygon1);
+        var triangles2 = earcut(positionPolygon2);
+        var triangles3 = earcut(positionPolygon3);
+
+        if(triangles1.length >= triangles2.length && triangles1.length >= triangles3.length)
+        {
+            for (v = 0; v < triangles1.length; v++, i+=3){
+                position[i] = positionPolygon[3*triangles1[v]];
+                position[i+1] = positionPolygon[3*triangles1[v]+1];
+                position[i+2] = positionPolygon[3*triangles1[v]+2];
+                centroid[0] += position[i];
+                centroid[1] += position[i+1];
+                centroid[2] += position[i+2];
+            }
+        } else if (triangles2.length >= triangles3.length) {
+            for (v = 0; v < triangles2.length; v++, i+=3){
+                position[i] = positionPolygon[3*triangles2[v]];
+                position[i+1] = positionPolygon[3*triangles2[v]+1];
+                position[i+2] = positionPolygon[3*triangles2[v]+2];
+                centroid[0] += position[i];
+                centroid[1] += position[i+1];
+                centroid[2] += position[i+2];
+            }       
+        } else {
+            for (v = 0; v < triangles3.length; v++, i+=3){
+                position[i] = positionPolygon[3*triangles3[v]];
+                position[i+1] = positionPolygon[3*triangles3[v]+1];
+                position[i+2] = positionPolygon[3*triangles3[v]+2];
+                centroid[0] += position[i];
+                centroid[1] += position[i+1];
+                centroid[2] += position[i+2];
+            }
+        }
+    }
+    centroid = mult(centroid, 3.0/position.length);
+    for (i=0; i<3; i++) center[i] = centroid[i];
+   
+    // compute radius of bounding sphere
+    for (v=0; v<position.length; v+=3){
+        radius = Math.max(radius, normsq(minus(
+                        [position[v], position[v+1], position[v+2]], centroid)));
+    }
+    radius = Math.sqrt(radius);
+
+    // compute normals
+    for (t=0; t<position.length; t+=9){
+        U = minus([position[t+3], position[t+4],position[t+5]], 
+                  [position[t  ], position[t+1],position[t+2]]);
+        V = minus([position[t+6], position[t+7],position[t+8]], 
+                  [position[t  ], position[t+1],position[t+2]]);
+        N = cross(U, V);
+        N = mult(N, 1.0/norm(N));
+        for (i=0; i<9; i++) normal[t+i] = N[i%3];
+    } 
+
+    // set st
+    /*for (i=0, t=0; t<textureCoord.length; t+=4, i+=6){ // 4 vtx per triangles
+        st[i] = textureCoord[t][0];
+        st[i+1] = textureCoord[t][1];
+        st[i+2] = textureCoord[t+1][0];
+        st[i+3] = textureCoord[t+1][1];
+        st[i+4] = textureCoord[t+2][0];
+        st[i+5] = textureCoord[t+2][1];
+    }*/
+
+    // compute tangents an binormals
+    /*for (i=0, t=0, v=0; t<position.length; t+=9, v+=6, i+=9){
+        // find the coord u and v in texture space
+        // project the natural base (s, t) on the base (u, v) in 
+        // tangent space
+        // now we use those coord in 3D space 
+        // and we normalize (maybe orthogonalize while preserving normal)
+        // Based on <a href="http://www.terathon.com/code/tangent.html">Computing Tangent Space Basis Vectors
+        U = minus([position[t+3], position[t+4],position[t+5]], 
+                  [position[t  ], position[t+1],position[t+2]]);
+        V = minus([position[t+6], position[t+7],position[t+8]], 
+                  [position[t  ], position[t+1],position[t+2]]);
+        Utex = [st[v+2] - st[v], st[v+3] -st[v+1]];
+        Vtex = [st[v+4] - st[v], st[v+5] -st[v+1]];
+
+        var r = 1.0 / (Utex[0] * Vtex[1] - Vtex[0] * Utex[1]);
+
+        var tan1 = [(Vtex[1] * U[0] - Utex[1] * V[0]) * r, 
+                    (Vtex[1] * U[1] - Utex[1] * V[1]) * r,
+                    (Vtex[1] * U[2] - Utex[1] * V[2]) * r];
+        var tan2 = [(Utex[0] * V[0] - Vtex[0] * U[0]) * r, 
+                    (Utex[0] * V[1] - Vtex[0] * U[1]) * r,
+                    (Utex[0] * V[2] - Vtex[0] * U[2]) * r];
+        tan1 = mult(tan1, 1.0/norm(tan1));
+        tan2 = mult(tan2, 1.0/norm(tan2));
+
+        for (i=0; i<9; i++){ 
+            tangent[t+i] = tan1[i%3];
+            binormal[t+i] = tan2[i%3];
+        }
+    }*/
+
+    return {
+        indices:indices,
+        position:position, 
+        normal:normal, 
+        tangent:tangent, 
+        binormal:binormal, 
+        st:st, 
+        bsphere_center:center, 
+        bsphere_radius:radius
+    };
+}
+
 /* Swicth between Wfs geometry types to perform the appropriate conversion
  * to types arrays.
  *
  * Note: only Mutipolygon made of triangles are handled for the moment
  */
 function geomFromWfs(type, coord, textureCoord){
+    if (type == 'PolyhedralSurface') {
+        return geomFromWfsPolyhedralSurface(coord, textureCoord);
+    }
     if (type != 'MultiPolygon') throw "Unhandled geometry type '"+type+"'";
 
     if (type == 'MultiPolygon'){
         return geomFromWfsTin(coord, textureCoord);
-    } else {
-        throw "Unhandled geometry type '"+type+"'";
     }
+    throw "Unhandled geometry type '"+type+"'";
 }
 
 var texRe = /\((.*),"(.*)"\)/;
@@ -270,18 +444,18 @@ onmessage = function(o) {
                 bbox[2] = geoJson.features[f].geometry.bbox[2];
                 bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
-
             if (inTile(tileBBox, bbox)){
-                var texP = texRe.exec(geoJson.features[f].properties.tex);
+                // temporarily removed textures
+                //var texP = texRe.exec(geoJson.features[f].properties.tex);
                 // remove the texture uv from properties
                 // because we put it in the geometry
-                geoJson.features[f].properties.tex = {url:texP[1]};
-                var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
-                var st = JSON.parse(arrJson);
+                //geoJson.features[f].properties.tex = {url:texP[1]};
+                //var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
+                //var st = JSON.parse(arrJson);
                 var coord = geoJson.features[f].geometry.coordinates;
                 var type = geoJson.features[f].geometry.type;
 
-                var geom = geomFromWfs(type, coord, st);
+                var geom = geomFromWfs(type, coord, coord/*st*/);
                 
                 // add attributes
                 geom.properties = JSON.stringify(geoJson.features[f].properties);
