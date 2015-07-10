@@ -232,7 +232,8 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     var nrm;
     var nIndices = 0;
     for (t = 0; t < coord.length; t++) {
-        nIndices += coord[t][0].length - 2;
+        // polygon with n points = n - 2 triangles - 1 because of duplicate first point
+        nIndices += coord[t][0].length - 2 - 1;
     }
     var indices = new Uint16Array(3*nIndices);// triangle soup 
     var position = new Float64Array(3*indices.length);
@@ -254,7 +255,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
         var positionPolygon2 = [];
         var positionPolygon3 = [];
         
-        for (v = 0; v < coord[t][0].length; v++){
+        for (v = 0; v < coord[t][0].length-1; v++){
             var duplicate = false;
             // removing duplicate points
             for(j = 0; j < positionPolygon.length; j+=3) {
@@ -378,7 +379,6 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
             binormal[t+i] = tan2[i%3];
         }
     }*/
-
     return {
         indices:indices,
         position:position, 
@@ -427,8 +427,8 @@ function urlQueries(url){
 var PACK_GEOMETRIES = false;
 
 onmessage = function(o) {
-    var tileBBox = JSON.parse('['+urlQueries(o.data).BBOX+']');
-    load(o.data, function(xhr) {
+    var tileBBox = JSON.parse('['+urlQueries(o.data.request).BBOX+']');
+    load(o.data.request, function(xhr) {
         var positionLength = 0;
         var geoJson = JSON.parse(xhr.responseText);
         for (var f = 0; f < geoJson.features.length; f++) {
@@ -478,7 +478,7 @@ onmessage = function(o) {
                 );
             }
         }
-        postMessage('done');
+        postMessage({workerId : o.data.workerId});
     });
 };
 
