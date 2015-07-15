@@ -15,7 +15,6 @@ importScripts('../thirdparty/earcut.js');
  */
 function load(url, callback) {
     var xhr;
-
     if (typeof XMLHttpRequest !== 'undefined') xhr = new XMLHttpRequest();
     else {
         var versions = ["MSXML2.XmlHttp.5.0",
@@ -463,8 +462,8 @@ onmessage = function(o) {
                 geom.gid = geoJson.features[f].properties.gid;
                 positionLength += geom.position.length;
 
-                postMessage( 
-                    geom, 
+                postMessage({geom: geom, workerId : o.data.workerId},
+                    //geom, 
                     [
                         geom.indices.buffer,
                         geom.position.buffer, 

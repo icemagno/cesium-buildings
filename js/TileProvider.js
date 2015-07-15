@@ -66,7 +66,7 @@ function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeM
     //this._textureBaseUrl = textureBaseUrl+'/';
     this._workerPool = new WorkerPool(4, 'js/createWfsGeometry');
     this._loadedBoxes = [];
-    this._cachedPrimitives = [];
+    this._cachedPrimitives = {};
     this._materialFunction = function(properties){
         return new Cesium.Material({
                 fabric : {
@@ -143,15 +143,16 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
     var that = this;
     if (tile.state === Cesium.QuadtreeTileLoadState.START) {
         tile.data = {
-            primitive: new Cesium.PrimitiveCollection(),
+            primitive: undefined,//new Cesium.PrimitiveCollection(),
             freeResources: function() {
                 if (Cesium.defined(this.primitive)) {
                     //this.primitive.destroy();
-                    this.primitive = undefined;
+                    //this.primitive = undefined;
                 }
             }
         };
 
+        tile.data.primitive = new Cesium.PrimitiveCollection();
         var earthRadius = 6371000;
         var tileSizeMeters = Math.abs(earthRadius*(tile.rectangle.south - tile.rectangle.north));
 
@@ -383,7 +384,19 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
         }
     }
 
-    var boxes = this.boxes(bbox);
+    var key = tile.x + ";" +  tile.y;
+    if(key in this._cachedPrimitives) {
+        var cached = this._cachedPrimitives[key];
+        for(var p = 0; p < cached.length; p++) {
+            tile.data.primitive.add(cached[p].primitive);
+        }
+        tile.data.primitive.update(context, frameState, []);
+        tile.state = Cesium.QuadtreeTileLoadState.DONE;
+        tile.renderable = true;
+        //this.boxLoaded(bbox);
+    } else {
+        this._cachedPrimitives[key] = [];
+    /*var boxes = this.boxes(bbox);
     if (boxes.available.length){
         // get cached primitives
         var cached = this._cachedPrimitives;
@@ -392,11 +405,11 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 tile.data.primitive.add(cached[p].primitive);
             }
         }
-    }
+    }*/
 
-    var nbOfLoadeBoxed = 0;
+    //var nbOfLoadeBoxed = 0;
     var that = this;
-    for (var b=0; b<boxes.needed.length; b++){
+    //for (var b=0; b<boxes.needed.length; b++){
         var request = this._url+
                 '?SERVICE=WFS'+
                 '&VERSION=1.0.0'+
@@ -404,23 +417,25 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 '&outputFormat=JSON'+
                 '&typeName='+this._layerName+
                 '&srsName=EPSG:3946'+   // en dur pour le test
-                '&BBOX='+boxes.needed[b].join(',');
+                '&BBOX='+/*boxes.needed[b]*/bbox.join(',');
 
         this._workerPool.enqueueJob({request : request}, function(w){
-            if (typeof tile.data.primitive == 'undefined'){
+            if (tile.data.primitive === undefined){
                 // tile suppressed while we waited for reply
                 // receive messages from worker until done
-                tile.state = Cesium.QuadtreeTileLoadState.DONE;
+                that._workerPool.releaseWorker(w.data.workerId);
+                tile.state = Cesium.QuadtreeTileLoadState.START;
                 tile.renderable = false;
-                return w.data != 'done';
+                delete that._cachedPrimitives[key];
+                return;
             }
-            if (w.data.workerId === undefined){
+            if (w.data.geom !== undefined){
 
-                var properties = JSON.parse(w.data.properties);
+                var properties = JSON.parse(w.data.geom.properties);
                 var prim = new Cesium.Primitive({
                     modelMatrix : m,
                     geometryInstances: new Cesium.GeometryInstance({
-                        geometry: geometryFromArrays(w.data)
+                        geometry: geometryFromArrays(w.data.geom)
                     }),
                     //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
@@ -429,28 +444,22 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                     asynchronous : false
                 });
                 prim.properties = properties;
-                that._cachedPrimitives.push({bbox:w.data.bbox, primitive:prim});
+                that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
                 tile.data.primitive.add(prim);
-                return true;
+                return;
             }
             that._workerPool.releaseWorker(w.data.workerId);
-            ++nbOfLoadeBoxed;
-            if (nbOfLoadeBoxed == boxes.needed.length){
+            //++nbOfLoadeBoxed;
+            //if (nbOfLoadeBoxed == boxes.needed.length){
                 tile.data.primitive.update(context, frameState, []);
                 tile.state = Cesium.QuadtreeTileLoadState.DONE;
                 tile.renderable = true;
-                that.boxLoaded(bbox);
-            }
-            return false;
+            //    that.boxLoaded(bbox);
+            //}
         });
     }
 
-    if (!boxes.needed.length){
-        tile.data.primitive.update(context, frameState, []);
-        tile.state = Cesium.QuadtreeTileLoadState.DONE;
-        tile.renderable = true;
-        this.boxLoaded(bbox);
-    }
+    
 
 
 };
