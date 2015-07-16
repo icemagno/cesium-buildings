@@ -250,9 +250,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     for (i=0, t=0; t<coord.length; t++){
         var delta = 0;
         var positionPolygon = [];
-        var positionPolygon1 = [];
-        var positionPolygon2 = [];
-        var positionPolygon3 = [];
+        var positionPolygon2D = [];
         
         for (v = 0; v < coord[t][0].length-1; v++){
             var duplicate = false;
@@ -271,49 +269,46 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
             positionPolygon[3 * (v - delta)] = coord[t][0][v][0];
             positionPolygon[3 * (v - delta) + 1] = coord[t][0][v][1];
             positionPolygon[3 * (v - delta) + 2] = coord[t][0][v][2];
-            positionPolygon1[2 * (v - delta)] = coord[t][0][v][0];
-            positionPolygon1[2 * (v - delta) + 1] = coord[t][0][v][1];
-            positionPolygon2[2 * (v - delta)] = coord[t][0][v][0];
-            positionPolygon2[2 * (v - delta) + 1] = coord[t][0][v][2];
-            positionPolygon3[2 * (v - delta)] = coord[t][0][v][1];
-            positionPolygon3[2 * (v - delta) + 1] = coord[t][0][v][2];
         }
         // removing some of the degenerated polyogns (2 points or less)
         if(positionPolygon.length < 9) continue;
-        // triangulation of the polygon projected on planes (xy) (zx) and (yz)
-        // triangulation with the most points is the correct one
-        var triangles1 = earcut(positionPolygon1);
-        var triangles2 = earcut(positionPolygon2);
-        var triangles3 = earcut(positionPolygon3);
-
-        if(triangles1.length >= triangles2.length && triangles1.length >= triangles3.length)
-        {
-            for (v = 0; v < triangles1.length; v++, i+=3){
-                position[i] = positionPolygon[3*triangles1[v]];
-                position[i+1] = positionPolygon[3*triangles1[v]+1];
-                position[i+2] = positionPolygon[3*triangles1[v]+2];
-                centroid[0] += position[i];
-                centroid[1] += position[i+1];
-                centroid[2] += position[i+2];
+        var vect1 = [positionPolygon[3] - positionPolygon[0],
+                     positionPolygon[4] - positionPolygon[1],
+                     positionPolygon[5] - positionPolygon[2]]
+        var vect2 = [positionPolygon[6] - positionPolygon[0],
+                     positionPolygon[7] - positionPolygon[1],
+                     positionPolygon[8] - positionPolygon[2]]
+        var vectProd = [vect1[1] * vect2[2] - vect1[2] * vect2[1],
+                        vect1[2] * vect2[0] - vect1[0] * vect2[2],
+                        vect1[0] * vect2[1] - vect1[1] * vect2[0]]
+        // triangulation of the polygon projected on planes (xy) (zx) or (yz)
+        if(Math.abs(vectProd[0]) > Math.abs(vectProd[1]) && Math.abs(vectProd[0]) > Math.abs(vectProd[2])) {
+            // (yz) projection
+            for(v = 0; 3 * v < positionPolygon.length; v++) {
+                positionPolygon2D[2 * v] = positionPolygon[3 * v + 1];
+                positionPolygon2D[2 * v + 1] = positionPolygon[3 * v + 2];
             }
-        } else if (triangles2.length >= triangles3.length) {
-            for (v = 0; v < triangles2.length; v++, i+=3){
-                position[i] = positionPolygon[3*triangles2[v]];
-                position[i+1] = positionPolygon[3*triangles2[v]+1];
-                position[i+2] = positionPolygon[3*triangles2[v]+2];
-                centroid[0] += position[i];
-                centroid[1] += position[i+1];
-                centroid[2] += position[i+2];
-            }       
+        } else if(Math.abs(vectProd[1]) > Math.abs(vectProd[2])) {
+            // (zx) projection
+            for(v = 0; 3 * v < positionPolygon.length; v++) {
+                positionPolygon2D[2 * v] = positionPolygon[3 * v];
+                positionPolygon2D[2 * v + 1] = positionPolygon[3 * v + 2];
+            }
         } else {
-            for (v = 0; v < triangles3.length; v++, i+=3){
-                position[i] = positionPolygon[3*triangles3[v]];
-                position[i+1] = positionPolygon[3*triangles3[v]+1];
-                position[i+2] = positionPolygon[3*triangles3[v]+2];
-                centroid[0] += position[i];
-                centroid[1] += position[i+1];
-                centroid[2] += position[i+2];
+            // (xy) projextion
+            for(v = 0; 3 * v < positionPolygon.length; v++) {
+                positionPolygon2D[2 * v] = positionPolygon[3 * v];
+                positionPolygon2D[2 * v + 1] = positionPolygon[3 * v + 1];
             }
+        }
+        var triangles = earcut(positionPolygon2D);
+        for (v = 0; v < triangles.length; v++, i+=3){
+            position[i] = positionPolygon[3*triangles[v]];
+            position[i+1] = positionPolygon[3*triangles[v]+1];
+            position[i+2] = positionPolygon[3*triangles[v]+2];
+            centroid[0] += position[i];
+            centroid[1] += position[i+1];
+            centroid[2] += position[i+2];
         }
     }
     centroid = mult(centroid, 3.0/position.length);
