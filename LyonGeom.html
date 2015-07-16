@@ -49,9 +49,6 @@
 
 var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
 
-// set the view of Lyon
-var extent = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
-viewer.camera.viewRectangle(extent);
 
 var texture_dir = "../w/textures/"
 
@@ -63,12 +60,14 @@ var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
 viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
 // Tiler
+var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider(
                        'http://ks29236.kimsufi.com/cgi-bin/tinyows',
                        'tows:lyongeom', 
                        'http://ks29236.kimsufi.com/cesium-buildings-data',
-                       500, 1000, viewer);
+                       rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
+viewer.camera.viewRectangle(rectangle);
 tileProvider.setMaterialFunction(function(properties){
     return new Cesium.Material({
         fabric : {

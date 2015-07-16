@@ -51,20 +51,33 @@ function geometryFromArrays(data){
 
 /* The tile will be empty if the tile size (north->south) is below minSize or above maxsize
  */
-function WfsTileProvider(url, layerName, textureBaseUrl, minSizeMeters, maxSizeMeters, viewer){
-    this._viewer = viewer;
+function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadDistance){
     this._quadtree = undefined;
-    this._tilingScheme = new Cesium.GeographicTilingScheme();
     this._errorEvent = new Cesium.Event();
-    this._levelZeroMaximumError = Cesium.QuadtreeTileProvider.computeDefaultLevelZeroMaximumGeometricError(this._tilingScheme);
 
-    this._minSizeMeters = minSizeMeters;
-    this._maxSizeMeters = maxSizeMeters;
-    
+//    this._minSizeMeters = minSizeMeters;
+//    this._maxSizeMeters = maxSizeMeters;
+
+    this._tileSize = tileSize;
+    var minExtent = new Cesium.Cartographic(extent.west, extent.south);
+//    var maxExtent = new Cesium.Cartographic(extent.east, extent.north);
+    var p1 = new Cesium.Cartographic(extent.east, extent.south);
+    var p2 = new Cesium.Cartographic(extent.west, extent.north);
+    var nx, ny;
+    var geodesic = new Cesium.EllipsoidGeodesic(minExtent, p1);
+    nx = Math.ceil(geodesic.surfaceDistance / tileSize / 2);
+    geodesic.setEndPoints(minExtent, p2);
+    ny = Math.ceil(geodesic.surfaceDistance / tileSize / 2);
+    // TODO : fix extent
+    this._tilingScheme = new Cesium.GeographicTilingScheme({rectangle : extent, numberOfLevelZeroTilesX : nx, numberOfLevelZeroTilesY : ny});
+
+    // defines the distance at which the data appears
+    this._levelZeroMaximumError = geodesic.surfaceDistance * 0.25 / (65 * ny) * loadDistance;
+
     this._url = url;
     this._layerName = layerName;
     //this._textureBaseUrl = textureBaseUrl+'/';
-    this._workerPool = new WorkerPool(4, 'js/createWfsGeometry');
+    this._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
     this._loadedBoxes = [];
     this._cachedPrimitives = {};
     this._materialFunction = function(properties){
@@ -159,13 +172,11 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
         //tile.data.primitive = new Cesium.PrimitiveCollection();
         tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
-        Cesium.Cartesian3.fromElements(tile.data.boundingSphere2D.center.z, 
-                                       tile.data.boundingSphere2D.center.x, 
-                                       tile.data.boundingSphere2D.center.y, 
-                                       tile.data.boundingSphere2D.center);
 
-        if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
+        //if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
+        if(tile.level === 1) {
             //this.placeHolder(tile);
+            this._quadtreeDepth = tile.level;
             this.prepareTile(tile, context, frameState);
             /*var points = [new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300),
                           new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.south, 300),
@@ -188,7 +199,7 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
         }
-        if(this._minSizeMeters >= tileSizeMeters) {
+        if(tile.level > 1) { //this._minSizeMeters >= tileSizeMeters) {
             tile.renderable = false;
         }
     }
