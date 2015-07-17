@@ -442,20 +442,34 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
             if (w.data.geom !== undefined){
 
                 var properties = JSON.parse(w.data.geom.properties);
+                var geom = geometryFromArrays(w.data.geom);
                 var prim = new Cesium.Primitive({
                     modelMatrix : m,
                     geometryInstances: new Cesium.GeometryInstance({
-                        geometry: geometryFromArrays(w.data.geom)
+                        geometry: geom
                     }),
                     //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
-                        material : that._materialFunction(properties)
+                        //material : that._materialFunction(properties),
+                        //vertexShaderSource : "void main(){gl_Position = ftransform();}",
+                        fragmentShaderSource : 'void main(){\n'+
+                            'gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n'+
+                        '}'
                     }),
                     asynchronous : false
                 });
+
+                //var polylines = new Cesium.PolylineCollection();
+                //polylines.add({
+                //  positions : geom.attributes.position,
+                //  width : 4,
+                //  material : Cesium.Color.RED
+                //});
+
                 prim.properties = properties;
                 that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
                 tile.data.primitive.add(prim);
+                //tile.data.primitive.add(polylines);
                 return;
             }
             that._workerPool.releaseWorker(w.data.workerId);
@@ -528,6 +542,7 @@ WfsTileProvider.prototype.boxLoaded = function(bbox){
  * the function recieve one parameter which is the feature attributes
  */
 WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
+    return;
     this._materialFunction = materialFunction;
     var cached = this._cachedPrimitives;
     // update cached primitives
