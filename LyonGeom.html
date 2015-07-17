@@ -67,7 +67,8 @@ var tileProvider = new WfsTileProvider(
                        'http://ks29236.kimsufi.com/cesium-buildings-data',
                        rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
-viewer.camera.viewRectangle(rectangle);
+var viewRect = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
+viewer.camera.viewRectangle(viewRect);
 tileProvider.setMaterialFunction(function(properties){
     return new Cesium.Material({
         fabric : {

@@ -174,9 +174,8 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
 
         //if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
-        if(tile.level === 1) {
+        if(tile.level === 1 && tile.x === 14 && tile.y === 8) {
             //this.placeHolder(tile);
-            this._quadtreeDepth = tile.level;
             this.prepareTile(tile, context, frameState);
             /*var points = [new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300),
                           new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.south, 300),
