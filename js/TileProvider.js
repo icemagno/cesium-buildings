@@ -1,7 +1,11 @@
 /* Create a Cesium Geometry from a structure
  * returned by createWfsGeometry worker
  */
+
+var TRICOUNT = 0;
+
 function geometryFromArrays(data){
+    TRICOUNT += data.position.length / 9;
     var attributes = new Cesium.GeometryAttributes();
     attributes.position  = new Cesium.GeometryAttribute({
         componentDatatype : Cesium.ComponentDatatype.DOUBLE,
@@ -90,6 +94,20 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
                 }
         });
     };
+    var ws = [extent.west * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
+    var en = [extent.east * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
+    var wn = [extent.west * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
+    var es = [extent.east * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
+    ws = proj4('EPSG:4326','EPSG:3946').forward(ws);
+    en = proj4('EPSG:4326','EPSG:3946').forward(en);
+    wn = proj4('EPSG:4326','EPSG:3946').forward(wn);
+    es = proj4('EPSG:4326','EPSG:3946').forward(es);
+    this._nativeExtent = [ws[0] < wn[0] ? ws[0] : wn[0],
+                          ws[1] < es[1] ? ws[1] : es[1],
+                          es[0] > en[0] ? es[0] : en[0],
+                          wn[1] > en[1] ? wn[1] : en[1]];
+    this._nx = nx * 2;
+    this._ny = ny * 2;
 }
 
 Object.defineProperties(WfsTileProvider.prototype, {
@@ -340,6 +358,58 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     var m = this.computeMatrix(localArray, cartesianArray);
     var m2 = this.computeMatrix(localArray2, cartesianArray2);
 
+var x0,x1,y0,y1;
+var lx = this._nativeExtent[2] - this._nativeExtent[0];
+var ly = this._nativeExtent[3] - this._nativeExtent[1];
+x0 = tile.x * lx / this._nx + this._nativeExtent[0];
+x1 = (tile.x + 1) * lx / this._nx + this._nativeExtent[0];
+y0 = (this._ny - tile.y - 1) * ly / this._ny + this._nativeExtent[1];
+y1 = (this._ny - tile.y) * ly / this._ny + this._nativeExtent[1];
+
+bbox[0] = x0;
+bbox[1] = y0;
+bbox[2] = x1;
+bbox[3] = y1;
+
+// grid display
+/*var colorPL;
+if( (tile.x + tile.y) % 2 === 0 ) colorPL = Cesium.Color.RED; else colorPL = Cesium.Color.BLUE;
+var p1 = new Cesium.Cartesian3(x0, y0, 300);
+var p2 = new Cesium.Cartesian3(x0, y1, 300);
+var p3 = new Cesium.Cartesian3(x1, y1, 300);
+var p4 = new Cesium.Cartesian3(x1, y0, 300);
+Cesium.Matrix4.multiplyByPoint(m, p1, p1);
+Cesium.Matrix4.multiplyByPoint(m, p2, p2);
+Cesium.Matrix4.multiplyByPoint(m, p3, p3);
+Cesium.Matrix4.multiplyByPoint(m, p4, p4);
+var bboxPL = [p1, p2, p3, p4, p1];
+viewer.entities.add({
+            polyline : {
+                positions : bboxPL,
+                width : 3,
+                material : new Cesium.PolylineGlowMaterialProperty({
+                    glowPower : 0.2,
+                    color : Cesium.Color.RED
+                })
+            }
+        });
+var q1 = new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300);
+var q2 = new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.north, 300);
+var q3 = new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.north, 300);
+var q4 = new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.south, 300);
+var bboxPL2 = [q1, q2, q3, q4, q1];
+viewer.entities.add({
+            polyline : {
+                positions : bboxPL2,
+                width : 3,
+                material : new Cesium.PolylineGlowMaterialProperty({
+                    glowPower : 0.2,
+                    color : Cesium.Color.BLUE
+                })
+            }
+        });
+*/
+
     if(DEBUG_POINTS)
     {
         var width = Cesium.Cartesian3.distance(pt1local, pt2local);
@@ -441,10 +511,24 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 return;
             }
             if (w.data.geom !== undefined){
-
+                var center = w.data.geom.bsphere_center;
+                var transformationMatrix;
+                var diag = [es[0] - wn[0], es[1] - wn[1]];
+                var posCenter = new Cesium.Cartesian3(w.data.geom.bbox[0], w.data.geom.bbox[1], 300);
+                Cesium.Matrix4.multiplyByPoint(m, posCenter, posCenter);
+                var vectP = [w.data.geom.bsphere_center[0] - wn[0], w.data.geom.bsphere_center[1] - wn[1]];
+                if(diag[0] * vectP[1] - diag[1] * vectP[0] < 0) {
+                    transformationMatrix = m;
+                }
+                else {
+                    transformationMatrix = m2;
+                }
+                if(center[0] < bbox[0] || center[0] > bbox[2] || center[1] < bbox[1] || center[1] > bbox[3]) {
+                    return;
+                }
                 var properties = JSON.parse(w.data.geom.properties);
                 var prim = new Cesium.Primitive({
-                    modelMatrix : m,
+                    modelMatrix : transformationMatrix,
                     geometryInstances: new Cesium.GeometryInstance({
                         geometry: geometryFromArrays(w.data.geom)
                     }),
@@ -532,11 +616,12 @@ WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
     this._materialFunction = materialFunction;
     var cached = this._cachedPrimitives;
     // update cached primitives
-    for (var p=0; p<cached.length; p++){
-        cached[p].primitive.appearance = new Cesium.MaterialAppearance({
-            material : materialFunction(cached[p].primitive.properties) 
-        });
+    //for (var p=0; p<cached.length; p++){
+    for(var t in cached) {
+        for(var p = 0; p < cached[t].length; p++) {
+            cached[t][p].primitive.appearance = new Cesium.MaterialAppearance({
+                 material : materialFunction(cached[t][p].primitive.properties) 
+            });
+        }
     }
 }
-
-

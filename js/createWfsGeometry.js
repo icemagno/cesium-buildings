@@ -243,7 +243,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     var centroid = [0,0,0];
     var radius = 0;
     var center = new Float32Array(3);
-    
+var posCount = 0;    
     for (i=0; i<indices.length; i++) indices[i] = i;
 
     // set position and compute 3D centroid
@@ -309,9 +309,10 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
             centroid[0] += position[i];
             centroid[1] += position[i+1];
             centroid[2] += position[i+2];
+            posCount++;
         }
     }
-    centroid = mult(centroid, 3.0/position.length);
+    centroid = mult(centroid, 1.0/ posCount);
     for (i=0; i<3; i++) center[i] = centroid[i];
    
     // compute radius of bounding sphere
@@ -438,7 +439,7 @@ onmessage = function(o) {
                 bbox[2] = geoJson.features[f].geometry.bbox[2];
                 bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
-            if (inTile(tileBBox, bbox)){
+            if (true){ // TODO : check if some robust filtering on the geometry is feasable at this stage
                 // temporarily removed textures
                 //var texP = texRe.exec(geoJson.features[f].properties.tex);
                 // remove the texture uv from properties
