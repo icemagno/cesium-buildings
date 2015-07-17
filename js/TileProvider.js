@@ -19,6 +19,21 @@ function geometryFromArrays(data){
         values : data.normal
     });
 
+    attributes.center = new Cesium.GeometryAttribute({
+        componentDatatype : Cesium.ComponentDatatype.FLOAT,
+        componentsPerAttribute : 3,
+        values : new Float32Array(data.position.length)
+    });
+
+    for (var t=0; t<attributes.position.length; t+=9){
+        var i;
+        for (i=0; i<9; i++){
+            attributes.center[t+i%3] += attributes.position[t+i];  
+        }
+        for (i=0; i<3; i++){
+            attributes.center[t+i%3] /= 3;
+        }
+    }
  
     // TODO uncomment once tangent and binormals are valid
     //
@@ -82,12 +97,13 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
     this._cachedPrimitives = {};
     this._materialFunction = function(properties){
         return new Cesium.Material({
-                fabric : {
-                    type : 'DiffuseMap',
-                    uniforms : {
-                        image : textureBaseUrl+'/'+properties.tex.url
-                    }
+            fabric : {
+                type : 'DiffuseMap',
+                components : {
+                    diffuse :  'vec3(1.,1.,1.)',
+                    specular : '0.1'
                 }
+            }
         });
     };
 }
@@ -450,11 +466,35 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                     }),
                     //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
-                        //material : that._materialFunction(properties),
+                        material : that._materialFunction(properties),
                         //vertexShaderSource : "void main(){gl_Position = ftransform();}",
-                        fragmentShaderSource : 'void main(){\n'+
-                            'gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n'+
-                        '}'
+                        vertexShaderSource : 
+                            'attribute vec3 position3DHigh;\n' +
+                            'attribute vec3 position3DLow;\n' +
+                            'attribute vec3 normal;\n' +
+                            'attribute vec2 st;\n' +
+                            'varying vec3 v_positionEC;\n' +
+                            'varying vec3 v_normalEC;\n' +
+                            'varying vec2 v_st;\n' +
+                            'void main() \n' +
+                            '{\n' +
+                                'vec4 p = czm_computePosition();\n' +
+                                'v_positionEC = (czm_modelViewRelativeToEye * p).xyz;      // position in eye coordinates\n' +
+                                'v_normalEC = czm_normal * normal;                         // normal in eye coordinates\n' +
+                                'v_st = st;\n' +
+                                'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
+                            '}\n'
+                        
+                        //'void main(){\n'+
+                        //    'vec4 p = czm_computePosition();\n'+
+                        //    'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n'+
+                        //'}'
+                        ,
+                        fragmentShaderSource : 
+                            'void main() \n' +
+                            '{\n' +
+                                'gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n' +
+                            '}\n'
                     }),
                     asynchronous : false
                 });
@@ -542,7 +582,7 @@ WfsTileProvider.prototype.boxLoaded = function(bbox){
  * the function recieve one parameter which is the feature attributes
  */
 WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
-    return;
+    return
     this._materialFunction = materialFunction;
     var cached = this._cachedPrimitives;
     // update cached primitives
