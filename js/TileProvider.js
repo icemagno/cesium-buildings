@@ -211,13 +211,11 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
                     })
                 }
             });*/ 
-        } else {
-            //this.placeHolder(tile);
-            //tile.data.primitive.update(context, frameState, []);
+        } else if(tile.level === 0) {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
-        }
-        if(tile.level > 1) { //this._minSizeMeters >= tileSizeMeters) {
+        } else {
+            tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = false;
         }
     }
@@ -511,7 +509,6 @@ viewer.entities.add({
                 return;
             }
             if (w.data.geom !== undefined){
-                var center = w.data.geom.bsphere_center;
                 var transformationMatrix;
                 var diag = [es[0] - wn[0], es[1] - wn[1]];
                 var posCenter = new Cesium.Cartesian3(w.data.geom.bbox[0], w.data.geom.bbox[1], 300);
@@ -523,10 +520,9 @@ viewer.entities.add({
                 else {
                     transformationMatrix = m2;
                 }
-                if(center[0] < bbox[0] || center[0] > bbox[2] || center[1] < bbox[1] || center[1] > bbox[3]) {
-                    return;
-                }
                 var properties = JSON.parse(w.data.geom.properties);
+                properties.tileX = tile.x;
+                properties.tileY = tile.y;
                 var prim = new Cesium.Primitive({
                     modelMatrix : transformationMatrix,
                     geometryInstances: new Cesium.GeometryInstance({

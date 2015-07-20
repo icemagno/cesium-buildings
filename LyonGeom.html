@@ -69,6 +69,7 @@ var tileProvider = new WfsTileProvider(
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
 viewer.camera.viewRectangle(cameraView);
+viewer.camera.lookUp(0.5);
 tileProvider.setMaterialFunction(function(properties){
     return new Cesium.Material({
         fabric : {
@@ -80,6 +81,13 @@ tileProvider.setMaterialFunction(function(properties){
         }
     });
 });
+
+// Imagery
+var provider = new Cesium.WebMapServiceImageryProvider({
+    url: 'https://download.data.grandlyon.com/wms/grandlyon',
+    layers : 'Ortho2009_vue_ensemble_16cm_CC46'
+});
+viewer.imageryLayers.addImageryProvider(provider);
  
 var thematicOn = false;
     function toggleThematic(){
@@ -89,7 +97,7 @@ var thematicOn = false;
                     fabric : {
                         type : 'DiffuseMap',
                         components : {
-                            diffuse :  properties.gid%2 ? 'vec3(.7,.3,0)' : 'vec3(1,.5,0)',
+                            diffuse : (properties.tileX + properties.tileY) % 2 ? 'vec3(0.5,0.5,0)' : 'vec3(0,0.5,0.5)',
                             specular : '0.1'
                         }
                     }

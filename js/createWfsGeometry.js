@@ -439,7 +439,8 @@ onmessage = function(o) {
                 bbox[2] = geoJson.features[f].geometry.bbox[2];
                 bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
-            if (true){ // TODO : check if some robust filtering on the geometry is feasable at this stage
+            var center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+            if (pointInTile(tileBBox, center)){
                 // temporarily removed textures
                 //var texP = texRe.exec(geoJson.features[f].properties.tex);
                 // remove the texture uv from properties
