@@ -3,6 +3,7 @@
  */
 
 var TRICOUNT = 0;
+var STATS = {};
 
 function geometryFromArrays(data){
     TRICOUNT += data.position.length / 9;
@@ -59,9 +60,6 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
     this._quadtree = undefined;
     this._errorEvent = new Cesium.Event();
 
-//    this._minSizeMeters = minSizeMeters;
-//    this._maxSizeMeters = maxSizeMeters;
-
     this._tileSize = tileSize;
     var minExtent = new Cesium.Cartographic(extent.west, extent.south);
 //    var maxExtent = new Cesium.Cartographic(extent.east, extent.north);
@@ -108,6 +106,9 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
                           wn[1] > en[1] ? wn[1] : en[1]];
     this._nx = nx * 2;
     this._ny = ny * 2;
+
+    this._tileLoaded = 0;
+    this._tilePending = 0;
 }
 
 Object.defineProperties(WfsTileProvider.prototype, {
@@ -311,13 +312,30 @@ WfsTileProvider.prototype.computeMatrix = function(localPtList, cartesianPtList)
 };
 
 var DEBUG_POINTS = false;
+var DEBUG_GRID = false;
 
 WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
+    var key = tile.x + ";" +  tile.y;
+    if(key in this._cachedPrimitives) {
+        var cached = this._cachedPrimitives[key];
+        for(var p = 0; p < cached.length; p++) {
+            tile.data.primitive.add(cached[p].primitive);
+        }
+        tile.data.primitive.update(context, frameState, []);
+        tile.state = Cesium.QuadtreeTileLoadState.DONE;
+        tile.renderable = true;
+        return;
+    }
+
+    this.addPendingTile();
+    this._cachedPrimitives[key] = [];
+    STATS[key] = {};
+    STATS[key]["start"] = (new Date()).getTime();
     tile.state = Cesium.QuadtreeTileLoadState.LOADING;
     var bboxll = [DEGREES_PER_RADIAN * tile.rectangle.west,
-                  DEGREES_PER_RADIAN * tile.rectangle.south,
-                  DEGREES_PER_RADIAN * tile.rectangle.east,
-                  DEGREES_PER_RADIAN * tile.rectangle.north];
+                    DEGREES_PER_RADIAN * tile.rectangle.south,
+                    DEGREES_PER_RADIAN * tile.rectangle.east,
+                    DEGREES_PER_RADIAN * tile.rectangle.north];
     var ws = [bboxll[0], bboxll[1]];
     var wn = [bboxll[0], bboxll[3]];
     var en = [bboxll[2], bboxll[3]];
@@ -326,11 +344,6 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     en = proj4('EPSG:4326','EPSG:3946').forward(en);
     wn = proj4('EPSG:4326','EPSG:3946').forward(wn);
     es = proj4('EPSG:4326','EPSG:3946').forward(es);
-    var bbox = [ws[0],
-                ws[1],
-                en[0],
-                en[1]]; // techniquement faux, ce n'est pas une bb carrée
-
 
     // matrix
     // triangle tile
@@ -356,57 +369,57 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     var m = this.computeMatrix(localArray, cartesianArray);
     var m2 = this.computeMatrix(localArray2, cartesianArray2);
 
-var x0,x1,y0,y1;
-var lx = this._nativeExtent[2] - this._nativeExtent[0];
-var ly = this._nativeExtent[3] - this._nativeExtent[1];
-x0 = tile.x * lx / this._nx + this._nativeExtent[0];
-x1 = (tile.x + 1) * lx / this._nx + this._nativeExtent[0];
-y0 = (this._ny - tile.y - 1) * ly / this._ny + this._nativeExtent[1];
-y1 = (this._ny - tile.y) * ly / this._ny + this._nativeExtent[1];
+    var x0,x1,y0,y1;
+    var lx = this._nativeExtent[2] - this._nativeExtent[0];
+    var ly = this._nativeExtent[3] - this._nativeExtent[1];
+    x0 = tile.x * lx / this._nx + this._nativeExtent[0];
+    x1 = (tile.x + 1) * lx / this._nx + this._nativeExtent[0];
+    y0 = (this._ny - tile.y - 1) * ly / this._ny + this._nativeExtent[1];
+    y1 = (this._ny - tile.y) * ly / this._ny + this._nativeExtent[1];
 
-bbox[0] = x0;
-bbox[1] = y0;
-bbox[2] = x1;
-bbox[3] = y1;
+    var bbox = [x0,y0,x1,y1];
 
-// grid display
-/*var colorPL;
-if( (tile.x + tile.y) % 2 === 0 ) colorPL = Cesium.Color.RED; else colorPL = Cesium.Color.BLUE;
-var p1 = new Cesium.Cartesian3(x0, y0, 300);
-var p2 = new Cesium.Cartesian3(x0, y1, 300);
-var p3 = new Cesium.Cartesian3(x1, y1, 300);
-var p4 = new Cesium.Cartesian3(x1, y0, 300);
-Cesium.Matrix4.multiplyByPoint(m, p1, p1);
-Cesium.Matrix4.multiplyByPoint(m, p2, p2);
-Cesium.Matrix4.multiplyByPoint(m, p3, p3);
-Cesium.Matrix4.multiplyByPoint(m, p4, p4);
-var bboxPL = [p1, p2, p3, p4, p1];
-viewer.entities.add({
-            polyline : {
-                positions : bboxPL,
-                width : 3,
-                material : new Cesium.PolylineGlowMaterialProperty({
-                    glowPower : 0.2,
-                    color : Cesium.Color.RED
-                })
-            }
-        });
-var q1 = new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300);
-var q2 = new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.north, 300);
-var q3 = new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.north, 300);
-var q4 = new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.south, 300);
-var bboxPL2 = [q1, q2, q3, q4, q1];
-viewer.entities.add({
-            polyline : {
-                positions : bboxPL2,
-                width : 3,
-                material : new Cesium.PolylineGlowMaterialProperty({
-                    glowPower : 0.2,
-                    color : Cesium.Color.BLUE
-                })
-            }
-        });
-*/
+    STATS[key]["matrix"] = (new Date()).getTime();
+
+    // grid display
+    if(DEBUG_GRID) {
+        var colorPL;
+        if( (tile.x + tile.y) % 2 === 0 ) colorPL = Cesium.Color.RED; else colorPL = Cesium.Color.BLUE;
+        var p1 = new Cesium.Cartesian3(x0, y0, 300);
+        var p2 = new Cesium.Cartesian3(x0, y1, 300);
+        var p3 = new Cesium.Cartesian3(x1, y1, 300);
+        var p4 = new Cesium.Cartesian3(x1, y0, 300);
+        Cesium.Matrix4.multiplyByPoint(m, p1, p1);
+        Cesium.Matrix4.multiplyByPoint(m, p2, p2);
+        Cesium.Matrix4.multiplyByPoint(m, p3, p3);
+        Cesium.Matrix4.multiplyByPoint(m, p4, p4);
+        var bboxPL = [p1, p2, p3, p4, p1];
+        viewer.entities.add({
+                    polyline : {
+                        positions : bboxPL,
+                        width : 3,
+                        material : new Cesium.PolylineGlowMaterialProperty({
+                            glowPower : 0.2,
+                            color : Cesium.Color.RED
+                        })
+                    }
+                });
+        var q1 = new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300);
+        var q2 = new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.north, 300);
+        var q3 = new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.north, 300);
+        var q4 = new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.south, 300);
+        var bboxPL2 = [q1, q2, q3, q4, q1];
+        viewer.entities.add({
+                    polyline : {
+                        positions : bboxPL2,
+                        width : 3,
+                        material : new Cesium.PolylineGlowMaterialProperty({
+                            glowPower : 0.2,
+                            color : Cesium.Color.BLUE
+                        })
+                    }
+                });
+    }
 
     if(DEBUG_POINTS)
     {
@@ -463,96 +476,68 @@ viewer.entities.add({
         }
     }
 
-    var key = tile.x + ";" +  tile.y;
-    if(key in this._cachedPrimitives) {
-        var cached = this._cachedPrimitives[key];
-        for(var p = 0; p < cached.length; p++) {
-            tile.data.primitive.add(cached[p].primitive);
+    var that = this;
+
+    var request = this._url+
+            '?SERVICE=WFS'+
+            '&VERSION=1.0.0'+
+            '&REQUEST=GetFeature'+
+            '&outputFormat=JSON'+
+            '&typeName='+this._layerName+
+            '&srsName=EPSG:3946'+   // en dur pour le test
+            '&BBOX='+/*boxes.needed[b]*/bbox.join(',');
+
+    this._workerPool.enqueueJob({request : request}, function(w){
+        if (tile.data.primitive === undefined){
+            if(w.data.geometry !== undefined) return;   // TODO : cancel request in stead of waiting for its completion
+            // tile suppressed while we waited for reply
+            // receive messages from worker until done
+            that._workerPool.releaseWorker(w.data.workerId);
+            tile.state = Cesium.QuadtreeTileLoadState.START;
+            tile.renderable = false;
+            delete that._cachedPrimitives[key];
+            that.removePendingTile();
+            return;
         }
+        if (w.data.geom !== undefined){
+            var transformationMatrix;
+            var diag = [es[0] - wn[0], es[1] - wn[1]];
+            var posCenter = new Cesium.Cartesian3(w.data.geom.bbox[0], w.data.geom.bbox[1], 300);
+            Cesium.Matrix4.multiplyByPoint(m, posCenter, posCenter);
+            var vectP = [w.data.geom.bsphere_center[0] - wn[0], w.data.geom.bsphere_center[1] - wn[1]];
+            if(diag[0] * vectP[1] - diag[1] * vectP[0] < 0) {
+                transformationMatrix = m;
+            }
+            else {
+                transformationMatrix = m2;
+            }
+            var properties = JSON.parse(w.data.geom.properties);
+            properties.tileX = tile.x;
+            properties.tileY = tile.y;
+            var prim = new Cesium.Primitive({
+                modelMatrix : transformationMatrix,
+                geometryInstances: new Cesium.GeometryInstance({
+                    geometry: geometryFromArrays(w.data.geom)
+                }),
+                //releaseGeometryInstances: false,
+                appearance : new Cesium.MaterialAppearance({
+                    material : that._materialFunction(properties)
+                }),
+                asynchronous : false
+            });
+            prim.properties = properties;
+            that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
+            tile.data.primitive.add(prim);
+            return;
+        }
+        that._workerPool.releaseWorker(w.data.workerId);
         tile.data.primitive.update(context, frameState, []);
         tile.state = Cesium.QuadtreeTileLoadState.DONE;
         tile.renderable = true;
-        //this.boxLoaded(bbox);
-    } else {
-        this._cachedPrimitives[key] = [];
-    /*var boxes = this.boxes(bbox);
-    if (boxes.available.length){
-        // get cached primitives
-        var cached = this._cachedPrimitives;
-        for (var p=0; p<cached.length; p++){
-            if (inTile(bbox, cached[p].bbox)){
-                tile.data.primitive.add(cached[p].primitive);
-            }
-        }
-    }*/
-
-    //var nbOfLoadeBoxed = 0;
-    var that = this;
-    //for (var b=0; b<boxes.needed.length; b++){
-        var request = this._url+
-                '?SERVICE=WFS'+
-                '&VERSION=1.0.0'+
-                '&REQUEST=GetFeature'+
-                '&outputFormat=JSON'+
-                '&typeName='+this._layerName+
-                '&srsName=EPSG:3946'+   // en dur pour le test
-                '&BBOX='+/*boxes.needed[b]*/bbox.join(',');
-
-        this._workerPool.enqueueJob({request : request}, function(w){
-            if (tile.data.primitive === undefined){
-                // tile suppressed while we waited for reply
-                // receive messages from worker until done
-                that._workerPool.releaseWorker(w.data.workerId);
-                tile.state = Cesium.QuadtreeTileLoadState.START;
-                tile.renderable = false;
-                delete that._cachedPrimitives[key];
-                return;
-            }
-            if (w.data.geom !== undefined){
-                var transformationMatrix;
-                var diag = [es[0] - wn[0], es[1] - wn[1]];
-                var posCenter = new Cesium.Cartesian3(w.data.geom.bbox[0], w.data.geom.bbox[1], 300);
-                Cesium.Matrix4.multiplyByPoint(m, posCenter, posCenter);
-                var vectP = [w.data.geom.bsphere_center[0] - wn[0], w.data.geom.bsphere_center[1] - wn[1]];
-                if(diag[0] * vectP[1] - diag[1] * vectP[0] < 0) {
-                    transformationMatrix = m;
-                }
-                else {
-                    transformationMatrix = m2;
-                }
-                var properties = JSON.parse(w.data.geom.properties);
-                properties.tileX = tile.x;
-                properties.tileY = tile.y;
-                var prim = new Cesium.Primitive({
-                    modelMatrix : transformationMatrix,
-                    geometryInstances: new Cesium.GeometryInstance({
-                        geometry: geometryFromArrays(w.data.geom)
-                    }),
-                    //releaseGeometryInstances: false,
-                    appearance : new Cesium.MaterialAppearance({
-                        material : that._materialFunction(properties)
-                    }),
-                    asynchronous : false
-                });
-                prim.properties = properties;
-                that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
-                tile.data.primitive.add(prim);
-                return;
-            }
-            that._workerPool.releaseWorker(w.data.workerId);
-            //++nbOfLoadeBoxed;
-            //if (nbOfLoadeBoxed == boxes.needed.length){
-                tile.data.primitive.update(context, frameState, []);
-                tile.state = Cesium.QuadtreeTileLoadState.DONE;
-                tile.renderable = true;
-            //    that.boxLoaded(bbox);
-            //}
-        });
-    }
-
-    
-
-
+        that.addLoadedTile();
+        STATS[key]["geom_stats"] = w.data.stats;
+        STATS[key]["end"] = (new Date()).getTime();
+    });
 };
 
 /* Return a list of 2D boxes (long lat in degrees) that are not already loaded
@@ -620,4 +605,26 @@ WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
             });
         }
     }
+}
+
+WfsTileProvider.prototype.addPendingTile = function () {
+    this._tilePending++;
+    this.updateProgress();
+}
+
+WfsTileProvider.prototype.addLoadedTile = function () {
+    this._tilePending--;
+    this._tileLoaded++;
+    this.updateProgress();
+}
+
+WfsTileProvider.prototype.removePendingTile = function () {
+    this._tilePending--;
+    this.updateProgress();
+}
+
+WfsTileProvider.prototype.updateProgress = function () {
+    var d = document.getElementById("info");
+    var tot = this._tilePending + this._tileLoaded;
+    d.innerHTML = "<b>" + this._tileLoaded + "/" + tot + "</b>";
 }

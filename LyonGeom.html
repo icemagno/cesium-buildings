@@ -43,8 +43,11 @@
   <div id="uiMenu">
     <button type="button" onclick="toggleThematic()">toggle thematic coloring</button> 
     <button type="button" onclick="toggleHighlight()">toggle highlight on mouseover</button> 
-    <button type="button" onclick="toggleOsm()">toggle OSM background</button> 
+    <button type="button" onclick="toggleOsm()">toggle OSM background</button>
+    <button type="button" onclick="saveStats()">save stats</button>
   </div>
+  <br/><br/>
+  <div id="info"></div>
   <script>
 
 var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
@@ -85,9 +88,14 @@ tileProvider.setMaterialFunction(function(properties){
 // Imagery
 var provider = new Cesium.WebMapServiceImageryProvider({
     url: 'https://download.data.grandlyon.com/wms/grandlyon',
-    layers : 'Ortho2009_vue_ensemble_16cm_CC46'
+    layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
 });
 viewer.imageryLayers.addImageryProvider(provider);
+
+function saveStats(){
+    urlContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(STATS));
+    window.open(urlContent, 'Records');
+}
  
 var thematicOn = false;
     function toggleThematic(){
