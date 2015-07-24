@@ -81,6 +81,21 @@ tileProvider.setMaterialFunction(function(properties){
     });
 });
  
+function setFilter(scene, filter, uniforms) {
+    scene.customPostProcess = new Cesium.CustomPostProcess(filter, uniforms);
+}
+    var uniforms = {vignetteAmount : function() { return 0.65; },
+                    vignetteGamma : function() { return 4.0; },
+                    colorTemperatureInner : function() { return 3500.0; },
+                    colorTemperatureOuter : function() { return 12000.0; },
+                    saturation : function() { return 0.5; },
+                    postSaturation : function() { return 0.5; },
+                    finalMultiplier : function() { return 1.2; },
+                    tintColorBottom : function() { return { x : 1.1, y : 0.85, z : 0.95 }; },
+                    tintColorTop : function() { return { x : 1.1, y : 0.77, z : 0.55 }; } };
+                    
+    setFilter(viewer.scene, Cesium._shaders.Retro, uniforms);
+
 var thematicOn = false;
     function toggleThematic(){
         if (!thematicOn){

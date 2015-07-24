@@ -480,7 +480,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                             '{\n' +
                                 'vec4 p = czm_computePosition();\n' +
                                 'v_positionEC = (czm_modelViewRelativeToEye * p).xyz;      // position in eye coordinates\n' +
-                                'v_normalEC = czm_normal * normal;                         // normal in eye coordinates\n' +
+                                'v_normalEC = /*czm_normal **/ normal;                         // normal in eye coordinates\n' +
                                 'v_st = st;\n' +
                                 'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
                             '}\n'
@@ -491,9 +491,22 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                         //'}'
                         ,
                         fragmentShaderSource : 
+                            'uniform sampler2D u_texture;\n' +
+                            'varying vec2 v_st;\n' +
+                            'float planeDistance(const in vec3 positionA, const in vec3 normalA, \n' +
+                                'const in vec3 positionB, const in vec3 normalB) {\n' +
+                                'vec3 positionDelta = positionB-positionA;\n' +
+                                'float positionDistanceSquared = dot(positionDelta, positionDelta);\n' +
+                                'float planeDistanceDelta = max(abs(dot(positionDelta, normalA)), abs(dot(positionDelta, normalB)));\n' +
+                                'return planeDistanceDelta * planeDistanceDelta / positionDistanceSquared;\n' +
+                            '}\n' +
+                            'varying vec3 v_normalEC;\n' +
+                            'varying vec3 v_positionEC;\n' +
                             'void main() \n' +
                             '{\n' +
-                                'gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n' +
+                                'vec3 l = vec3(1.);//texture2D(u_texture, v_st).xyz;\n'+
+                                'float d = planeDistance(v_positionEC, v_normalEC, vec3(0,0,0), vec3(0,0,1));\nd = d*d;' +
+                                'gl_FragColor = vec4(l, 1.0);\n' +
                             '}\n'
                     }),
                     asynchronous : false
