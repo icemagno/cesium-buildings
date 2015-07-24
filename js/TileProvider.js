@@ -106,6 +106,8 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
             }
         });
     };
+    this._normalTexture = undefined;
+    this._positionTexture = undefined;
 }
 
 Object.defineProperties(WfsTileProvider.prototype, {
@@ -137,7 +139,24 @@ Object.defineProperties(WfsTileProvider.prototype, {
     }
 });
 
-WfsTileProvider.prototype.beginUpdate = function(context, frameState, commandList) {};
+WfsTileProvider.prototype.beginUpdate = function(context, frameState, commandList) {
+    var width = context.drawingBufferWidth;
+    var height = context.drawingBufferHeight;
+    this._normalTexture = this._normalTexture && this._normalTexture.destroy();
+    this._normalTexture = context.createTexture2D({
+                width : width,
+                height : height,
+                pixelFormat : Cesium.PixelFormat.RGBA,
+                pixelDatatype : Cesium.PixelDatatype.UNSIGNED_BYTE
+            });
+    this._positionTexture = this._positionTexture && this._positionTexture.destroy();
+    this._positionTexture = context.createTexture2D({
+                width : width,
+                height : height,
+                pixelFormat : Cesium.PixelFormat.RGBA,
+                pixelDatatype : Cesium.PixelDatatype.UNSIGNED_BYTE
+            });
+};
 
 WfsTileProvider.prototype.endUpdate = function(context, frameState, commandList) {};
 
@@ -190,7 +209,7 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
 
         //if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
-        if(tile.level === 1 && tile.x === 14 && tile.y === 8) {
+        if(tile.level === 1/* && tile.x === 14 && tile.y === 8*/) {
             //this.placeHolder(tile);
             this.prepareTile(tile, context, frameState);
             /*var points = [new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300),
@@ -459,6 +478,9 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
 
                 var properties = JSON.parse(w.data.geom.properties);
                 var geom = geometryFromArrays(w.data.geom);
+                var lines = w.data.geom.polygons;
+                var uniforms = {u_normals : function() {return that._normalTexture;},
+                                u_positions : function() {return that._positionTexture;}};
                 var prim = new Cesium.Primitive({
                     modelMatrix : m,
                     geometryInstances: new Cesium.GeometryInstance({
@@ -466,9 +488,9 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                     }),
                     //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
-                        material : that._materialFunction(properties),
+                        material : /*new Cesium.Material({uniforms : uniforms})*/that._materialFunction(properties),
                         //vertexShaderSource : "void main(){gl_Position = ftransform();}",
-                        vertexShaderSource : 
+                        /*vertexShaderSource : 
                             'attribute vec3 position3DHigh;\n' +
                             'attribute vec3 position3DLow;\n' +
                             'attribute vec3 normal;\n' +
@@ -480,18 +502,21 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                             '{\n' +
                                 'vec4 p = czm_computePosition();\n' +
                                 'v_positionEC = (czm_modelViewRelativeToEye * p).xyz;      // position in eye coordinates\n' +
-                                'v_normalEC = /*czm_normal **/ normal;                         // normal in eye coordinates\n' +
+                                //'v_normalEC = czm_normal * normal;                         // normal in eye coordinates\n' +
+                                'v_normalEC = normal;                         // normal in eye coordinates\n' +
                                 'v_st = st;\n' +
                                 'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
-                            '}\n'
+                            '}\n'*/
                         
                         //'void main(){\n'+
                         //    'vec4 p = czm_computePosition();\n'+
                         //    'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n'+
                         //'}'
-                        ,
+                        /*,
                         fragmentShaderSource : 
                             'uniform sampler2D u_texture;\n' +
+                            //'uniform sampler2D u_normals;\n' +
+                            //'uniform sampler2D u_positions;\n' +
                             'varying vec2 v_st;\n' +
                             'float planeDistance(const in vec3 positionA, const in vec3 normalA, \n' +
                                 'const in vec3 positionB, const in vec3 normalB) {\n' +
@@ -505,9 +530,10 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                             'void main() \n' +
                             '{\n' +
                                 'vec3 l = vec3(1.);//texture2D(u_texture, v_st).xyz;\n'+
+                                //'vec3 test = texture2D(u_normals, v_st).xyz;\n'+
                                 'float d = planeDistance(v_positionEC, v_normalEC, vec3(0,0,0), vec3(0,0,1));\nd = d*d;' +
                                 'gl_FragColor = vec4(l, 1.0);\n' +
-                            '}\n'
+                            '}\n'*/
                     }),
                     asynchronous : false
                 });
@@ -518,10 +544,41 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 //  width : 4,
                 //  material : Cesium.Color.RED
                 //});
+                var outlines = new Cesium.PrimitiveCollection();
+                for(var l = 0; l < lines.length; l++) {
+                    var positions = new Float64Array(lines[l].length);
+                    for(var p = 0; p < lines[l].length; p++) {
+                        positions[p] = lines[l][p];
+                    }
+                    var geometry = new Cesium.Geometry({
+                      attributes : {
+                          position : new Cesium.GeometryAttribute({
+                          componentDatatype : Cesium.ComponentDatatype.DOUBLE,
+                          componentsPerAttribute : 3,
+                          values : positions,
+                        })
+                      },
+                      primitiveType : Cesium.PrimitiveType.LINE_LOOP,
+                      boundingSphere : Cesium.BoundingSphere.fromVertices(positions)
+                    });
+                    var outline = new Cesium.Primitive({
+                        modelMatrix : m,
+                        geometryInstances : new Cesium.GeometryInstance({
+                            geometry: geometry,
+                            attributes : {
+                              color : Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.BLACK)
+                            }
+                        }),
+                        appearance : new Cesium.PerInstanceColorAppearance({flat : true}),
+                        asynchronous : false
+                    });
+                    outlines.add(outline);
+                }
 
                 prim.properties = properties;
                 that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
                 tile.data.primitive.add(prim);
+                tile.data.primitive.add(outlines);
                 //tile.data.primitive.add(polylines);
                 return;
             }
@@ -595,7 +652,6 @@ WfsTileProvider.prototype.boxLoaded = function(bbox){
  * the function recieve one parameter which is the feature attributes
  */
 WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
-    return
     this._materialFunction = materialFunction;
     var cached = this._cachedPrimitives;
     // update cached primitives

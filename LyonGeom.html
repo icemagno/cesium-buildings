@@ -63,7 +63,7 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider(
                        'http://ks29236.kimsufi.com/cgi-bin/tinyows',
-                       'tows:lyongeom', 
+                       'tows:extruded', 
                        'http://ks29236.kimsufi.com/cesium-buildings-data',
                        rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
@@ -94,7 +94,7 @@ function setFilter(scene, filter, uniforms) {
                     tintColorBottom : function() { return { x : 1.1, y : 0.85, z : 0.95 }; },
                     tintColorTop : function() { return { x : 1.1, y : 0.77, z : 0.55 }; } };
                     
-    setFilter(viewer.scene, Cesium._shaders.Retro, uniforms);
+    //setFilter(viewer.scene, Cesium._shaders.Retro, uniforms);
 
 var thematicOn = false;
     function toggleThematic(){

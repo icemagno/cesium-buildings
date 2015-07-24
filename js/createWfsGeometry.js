@@ -243,6 +243,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     var centroid = [0,0,0];
     var radius = 0;
     var center = new Float32Array(3);
+    var polygons = [];
     
     for (i=0; i<indices.length; i++) indices[i] = i;
 
@@ -310,6 +311,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
             centroid[1] += position[i+1];
             centroid[2] += position[i+2];
         }
+        polygons.push(positionPolygon);
     }
     centroid = mult(centroid, 3.0/position.length);
     for (i=0; i<3; i++) center[i] = centroid[i];
@@ -381,7 +383,8 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
         binormal:binormal, 
         st:st, 
         bsphere_center:center, 
-        bsphere_radius:radius
+        bsphere_radius:radius,
+        polygons:polygons
     };
 }
 
