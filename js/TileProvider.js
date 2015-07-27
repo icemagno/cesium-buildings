@@ -28,10 +28,7 @@ function geometryFromArrays(data){
     for (var t=0; t<attributes.position.length; t+=9){
         var i;
         for (i=0; i<9; i++){
-            attributes.center[t+i%3] += attributes.position[t+i];  
-        }
-        for (i=0; i<3; i++){
-            attributes.center[t+i%3] /= 3;
+            attributes.center[t+i%3] += attributes.position[t+i]/3;  
         }
     }
  
@@ -489,51 +486,31 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                     //releaseGeometryInstances: false,
                     appearance : new Cesium.MaterialAppearance({
                         material : /*new Cesium.Material({uniforms : uniforms})*/that._materialFunction(properties),
-                        //vertexShaderSource : "void main(){gl_Position = ftransform();}",
-                        /*vertexShaderSource : 
+                        vertexShaderSource : 
                             'attribute vec3 position3DHigh;\n' +
                             'attribute vec3 position3DLow;\n' +
                             'attribute vec3 normal;\n' +
                             'attribute vec2 st;\n' +
-                            'varying vec3 v_positionEC;\n' +
-                            'varying vec3 v_normalEC;\n' +
+                            'varying vec3 v_normal;\n' +
                             'varying vec2 v_st;\n' +
                             'void main() \n' +
                             '{\n' +
                                 'vec4 p = czm_computePosition();\n' +
-                                'v_positionEC = (czm_modelViewRelativeToEye * p).xyz;      // position in eye coordinates\n' +
-                                //'v_normalEC = czm_normal * normal;                         // normal in eye coordinates\n' +
-                                'v_normalEC = normal;                         // normal in eye coordinates\n' +
+                                'v_normal = normal;\n' +
                                 'v_st = st;\n' +
                                 'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
-                            '}\n'*/
-                        
-                        //'void main(){\n'+
-                        //    'vec4 p = czm_computePosition();\n'+
-                        //    'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n'+
-                        //'}'
-                        /*,
+                            '}\n'
+                        ,
                         fragmentShaderSource : 
                             'uniform sampler2D u_texture;\n' +
-                            //'uniform sampler2D u_normals;\n' +
-                            //'uniform sampler2D u_positions;\n' +
                             'varying vec2 v_st;\n' +
-                            'float planeDistance(const in vec3 positionA, const in vec3 normalA, \n' +
-                                'const in vec3 positionB, const in vec3 normalB) {\n' +
-                                'vec3 positionDelta = positionB-positionA;\n' +
-                                'float positionDistanceSquared = dot(positionDelta, positionDelta);\n' +
-                                'float planeDistanceDelta = max(abs(dot(positionDelta, normalA)), abs(dot(positionDelta, normalB)));\n' +
-                                'return planeDistanceDelta * planeDistanceDelta / positionDistanceSquared;\n' +
-                            '}\n' +
-                            'varying vec3 v_normalEC;\n' +
-                            'varying vec3 v_positionEC;\n' +
+                            'varying vec3 v_normal;\n' +
+                            'vec3 round(vec3 v){return floor(v+vec3(0.5));}\n' +
                             'void main() \n' +
                             '{\n' +
-                                'vec3 l = vec3(1.);//texture2D(u_texture, v_st).xyz;\n'+
-                                //'vec3 test = texture2D(u_normals, v_st).xyz;\n'+
-                                'float d = planeDistance(v_positionEC, v_normalEC, vec3(0,0,0), vec3(0,0,1));\nd = d*d;' +
-                                'gl_FragColor = vec4(l, 1.0);\n' +
-                            '}\n'*/
+                                'vec3 rndNrml = round(100.0*v_normal)/100.0;\n' +
+                                'gl_FragColor = vec4(rndNrml*.5 + vec3(.5), 1.);\n' +
+                            '}\n'
                     }),
                     asynchronous : false
                 });
@@ -544,41 +521,41 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 //  width : 4,
                 //  material : Cesium.Color.RED
                 //});
-                var outlines = new Cesium.PrimitiveCollection();
-                for(var l = 0; l < lines.length; l++) {
-                    var positions = new Float64Array(lines[l].length);
-                    for(var p = 0; p < lines[l].length; p++) {
-                        positions[p] = lines[l][p];
-                    }
-                    var geometry = new Cesium.Geometry({
-                      attributes : {
-                          position : new Cesium.GeometryAttribute({
-                          componentDatatype : Cesium.ComponentDatatype.DOUBLE,
-                          componentsPerAttribute : 3,
-                          values : positions,
-                        })
-                      },
-                      primitiveType : Cesium.PrimitiveType.LINE_LOOP,
-                      boundingSphere : Cesium.BoundingSphere.fromVertices(positions)
-                    });
-                    var outline = new Cesium.Primitive({
-                        modelMatrix : m,
-                        geometryInstances : new Cesium.GeometryInstance({
-                            geometry: geometry,
-                            attributes : {
-                              color : Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.BLACK)
-                            }
-                        }),
-                        appearance : new Cesium.PerInstanceColorAppearance({flat : true}),
-                        asynchronous : false
-                    });
-                    outlines.add(outline);
-                }
+                //var outlines = new Cesium.PrimitiveCollection();
+                //for(var l = 0; l < lines.length; l++) {
+                //    var positions = new Float64Array(lines[l].length);
+                //    for(var p = 0; p < lines[l].length; p++) {
+                //        positions[p] = lines[l][p];
+                //    }
+                //    var geometry = new Cesium.Geometry({
+                //      attributes : {
+                //          position : new Cesium.GeometryAttribute({
+                //          componentDatatype : Cesium.ComponentDatatype.DOUBLE,
+                //          componentsPerAttribute : 3,
+                //          values : positions,
+                //        })
+                //      },
+                //      primitiveType : Cesium.PrimitiveType.LINE_LOOP,
+                //      boundingSphere : Cesium.BoundingSphere.fromVertices(positions)
+                //    });
+                //    var outline = new Cesium.Primitive({
+                //        modelMatrix : m,
+                //        geometryInstances : new Cesium.GeometryInstance({
+                //            geometry: geometry,
+                //            attributes : {
+                //              color : Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.BLACK)
+                //            }
+                //        }),
+                //        appearance : new Cesium.PerInstanceColorAppearance({flat : true}),
+                //        asynchronous : false
+                //    });
+                //    outlines.add(outline);
+                //}
 
                 prim.properties = properties;
                 that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
                 tile.data.primitive.add(prim);
-                tile.data.primitive.add(outlines);
+                //tile.data.primitive.add(outlines);
                 //tile.data.primitive.add(polylines);
                 return;
             }
