@@ -25,3 +25,8 @@ function inTile(tileBBox, geom){
     return intersects(tileBBox, geom) && !onSouthOrWest(tileBBox, geom);
 }
 
+function pointInTile(tileBBox, point){
+    return (tileBBox[0] <= point[0] && point[0] < tileBBox[2] &&
+            tileBBox[1] <= point[1] && point[1] < tileBBox[3])
+}
+

@@ -43,8 +43,11 @@
   <div id="uiMenu">
     <button type="button" onclick="toggleThematic()">toggle thematic coloring</button> 
     <button type="button" onclick="toggleHighlight()">toggle highlight on mouseover</button> 
-    <button type="button" onclick="toggleOsm()">toggle OSM background</button> 
+    <button type="button" onclick="toggleOsm()">toggle OSM background</button>
+    <button type="button" onclick="saveStats()">save stats</button>
   </div>
+  <br/><br/>
+  <div id="info"></div>
   <script>
 
 var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
@@ -63,12 +66,18 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider(
                        'http://ks29236.kimsufi.com/cgi-bin/tinyows',
-                       'tows:extruded', 
+                       'tows:lyongeom', 
                        'http://ks29236.kimsufi.com/cesium-buildings-data',
                        rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
+/*<<<<<<< HEAD
 var viewRect = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
 viewer.camera.viewRectangle(viewRect);
+=======*/
+var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
+viewer.camera.viewRectangle(cameraView);
+viewer.camera.lookUp(0.5);
+//>>>>>>> error_of_approx_projection
 tileProvider.setMaterialFunction(function(properties){
     return new Cesium.Material({
         fabric : {
@@ -80,6 +89,18 @@ tileProvider.setMaterialFunction(function(properties){
         }
     });
 });
+
+// Imagery
+var provider = new Cesium.WebMapServiceImageryProvider({
+    url: 'https://download.data.grandlyon.com/wms/grandlyon',
+    layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
+});
+viewer.imageryLayers.addImageryProvider(provider);
+
+function saveStats(){
+    urlContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(STATS));
+    window.open(urlContent, 'Records');
+}
  
 function setFilter(scene, filter, uniforms) {
     scene.customPostProcess = new Cesium.CustomPostProcess(filter, uniforms);
@@ -104,7 +125,7 @@ var thematicOn = false;
                     fabric : {
                         type : 'DiffuseMap',
                         components : {
-                            diffuse :  properties.gid%2 ? 'vec3(.7,.3,0)' : 'vec3(1,.5,0)',
+                            diffuse : (properties.tileX + properties.tileY) % 2 ? 'vec3(0.5,0.5,0)' : 'vec3(0,0.5,0.5)',
                             specular : '0.1'
                         }
                     }
@@ -117,7 +138,10 @@ var thematicOn = false;
                     fabric : {
                         type : 'DiffuseMap',
                         uniforms : {
-                            image :  'http://localhost/w/textures'+'/'+properties.tex.url
+                            components : {
+                                diffuse :  'vec3(1,1,1)',
+                                specular : '0.1'
+                            }
                         }
                     }
                 });
@@ -196,231 +220,7 @@ var thematicOn = false;
             handler = undefined;
         }
         }
-/*
-var viewer = new Cesium.Viewer('cesiumContainer');
-var extent = new Cesium.Rectangle.fromDegrees(4.833447,45.767639, 4.865213, 45.782010);
-    viewer.camera.viewRectangle(extent);
 
-var scene = viewer.scene;
-
-
-// triangle tile
-//var pt1local = new Cesium.Cartesian3(-1370.3492, 1988.8350, 0);
-//var pt2local = new Cesium.Cartesian3(-1383.0728, 2532.7252, 0);
-//var pt3local = new Cesium.Cartesian3(-1806.0040, 1978.6626, 0);
-var pt1local = new Cesium.Cartesian3(-5177187.0659, 1844583.4299, 0);
-var pt2local = new Cesium.Cartesian3(-5177199.7895, 1845127.3201, 0);
-var pt3local = new Cesium.Cartesian3(-5177622.7207, 1844573.2575, 0);
-
-var pt1cart = new Cesium.Cartesian3.fromDegrees(4.859421, 45.779551, 0);
-var pt2cart = new Cesium.Cartesian3.fromDegrees(4.866417, 45.779551, 0);
-var pt3cart = new Cesium.Cartesian3.fromDegrees(4.859421, 45.783472, 0);
-
-// translation lambert -> lambert originie en pt1
-var t0 = new Cesium.Cartesian3(5177187.0659, -1844583.4299, 0);
-
-// définition de la transformation
-var t = new Cesium.Cartesian3.fromDegrees(4.859421,45.779551,viewer.ellipsoid);
-//Cesium.Cartesian3.add(t0,t,t);
-
-//var m = Cesium.Matrix4.fromRotationTranslation(r,t);
-var m = Cesium.Matrix4.fromTranslation(t);
-
-
-var u = new Cesium.Cartesian3();
-var v = new Cesium.Cartesian3();
-var w = new Cesium.Cartesian3();
-Cesium.Cartesian3.subtract(pt2local, pt1local, u);
-Cesium.Cartesian3.subtract(pt3local, pt1local, v);
-Cesium.Cartesian3.cross(u,v,w);
-
-var up = new Cesium.Cartesian3();
-var vp = new Cesium.Cartesian3();
-var wp = new Cesium.Cartesian3();
-Cesium.Cartesian3.subtract(pt2cart, pt1cart, up);
-Cesium.Cartesian3.subtract(pt3cart, pt1cart, vp);
-Cesium.Cartesian3.cross(up,vp,wp);
-
-var U = new Cesium.Matrix3(u.x,v.x,w.x,
-                          u.y,v.y,w.y,
-                          u.z,v.z,w.z);
-
-var Up = new Cesium.Matrix3(up.x,vp.x,wp.x,
-                          up.y,vp.y,wp.y,
-                          up.z,vp.z,wp.z);
-
-var Uinv = new Cesium.Matrix3();
-Cesium.Matrix3.inverse(U, Uinv);
-
-var M = new Cesium.Matrix3();
-Cesium.Matrix3.multiply(Up, Uinv, M);
-
-Cesium.Matrix4.multiplyByMatrix3(m, M, m);
-
-var M2 = new Cesium.Matrix4();
-Cesium.Matrix4.fromTranslation(t0, M2);
-Cesium.Matrix4.multiply(m, M2, m);
-
-
-// tests
-
-// points triangle
-var pt1localToCart = new Cesium.Cartesian3();
-var pt2localToCart = new Cesium.Cartesian3();
-var pt3localToCart = new Cesium.Cartesian3();
-
-Cesium.Matrix4.multiplyByPoint(m, pt1local, pt1localToCart);
-Cesium.Matrix4.multiplyByPoint(m, pt2local, pt2localToCart);
-Cesium.Matrix4.multiplyByPoint(m, pt3local, pt3localToCart);
-
-
-viewer.entities.add({
-        position : pt1localToCart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.SKYBLUE, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt2localToCart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.SKYBLUE, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt3localToCart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.SKYBLUE, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt1cart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.YELLOW, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt2cart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.YELLOW, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt3cart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.YELLOW, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-
-console.log("Distance p1 : " + Cesium.Cartesian3.distance(pt1localToCart, pt1cart));
-console.log("Distance p2 : " + Cesium.Cartesian3.distance(pt2localToCart, pt2cart));
-console.log("Distance p3 : " + Cesium.Cartesian3.distance(pt3localToCart, pt3cart));
-
-
-// points côté triangle
-var pt1ct = new Cesium.Cartesian3(-5177387.0659, 1844583.4299, 0);
-var pt2ct = new Cesium.Cartesian3(-5177187.0659, 1844783.4299, 0);
-var pt3ct = new Cesium.Cartesian3(-5177411.1051, 1844850.2888, 0);
-
-var pt1ctcart = new Cesium.Cartesian3.fromDegrees(4.85948103826,45.7813500683, 0);
-var pt2ctcart = new Cesium.Cartesian3.fromDegrees(4.86199217191,45.7795089633, 0);
-var pt3ctcart = new Cesium.Cartesian3.fromDegrees(4.86291907815,45.7815102048, 0);
-
-Cesium.Matrix4.multiplyByPoint(m, pt1ct, pt1ct);
-Cesium.Matrix4.multiplyByPoint(m, pt2ct, pt2ct);
-Cesium.Matrix4.multiplyByPoint(m, pt3ct, pt3ct);
-
-
-viewer.entities.add({
-        position : pt1ctcart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.BLUEVIOLET, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt2ctcart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.BLUEVIOLET, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt3ctcart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.BLUEVIOLET, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-
-
-viewer.entities.add({
-        position : pt1ct,
-        point : {
-            show : true, // default
-            color : Cesium.Color.RED, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt2ct,
-        point : {
-            show : true, // default
-            color : Cesium.Color.RED, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt3ct,
-        point : {
-            show : true, // default
-            color : Cesium.Color.RED, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-
-
-console.log("Distance pc1 : " + Cesium.Cartesian3.distance(pt1ct, pt1ctcart));
-console.log("Distance pc2 : " + Cesium.Cartesian3.distance(pt2ct, pt2ctcart));
-console.log("Distance pc3 : " + Cesium.Cartesian3.distance(pt3ct, pt3ctcart));
-
-var pt1m = new Cesium.Cartesian3(-5177387.0659, 1844783.4299, 0);
-var pt1mcart = new Cesium.Cartesian3.fromDegrees(4.86205229285,45.7813080302, 0);
-Cesium.Matrix4.multiplyByPoint(m, pt1m, pt1m);
-
-console.log("Distance pm1 : " + Cesium.Cartesian3.distance(pt1m, pt1mcart));
-
-viewer.entities.add({
-        position : pt1m,
-        point : {
-            show : true, // default
-            color : Cesium.Color.BROWN, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    });
-viewer.entities.add({
-        position : pt1mcart,
-        point : {
-            show : true, // default
-            color : Cesium.Color.CORAL, // default: WHITE
-            pixelSize : 10 // default: 1
-        }
-    }); 
-*/
   </script>
 </body>
 </html>

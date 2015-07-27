@@ -83,6 +83,7 @@ function normalize(u){
 var WGS84_RADII_SQUARED = [6378137.0 * 6378137.0, 6378137.0 * 6378137.0, 6356752.3142451793 * 6356752.3142451793];
 var DEGREES_PER_RADIAN = 180.0 / Math.PI;
 var RADIAN_PER_DEGREEE = 1 / DEGREES_PER_RADIAN;
+var GEOMETRY_STATS = {};
 
 function cartesianFromDregree(longitude, latitude, height) {
     var lat = latitude*RADIAN_PER_DEGREEE;
@@ -245,9 +246,11 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     var center = new Float32Array(3);
     var polygons = [];
     
+    var posCount = 0;
     for (i=0; i<indices.length; i++) indices[i] = i;
 
     // set position and compute 3D centroid
+    GEOMETRY_STATS["triangulation_start"][GEOMETRY_STATS["triangulation_start"].length] = (new Date()).getTime();
     for (i=0, t=0; t<coord.length; t++){
         var delta = 0;
         var positionPolygon = [];
@@ -310,10 +313,12 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
             centroid[0] += position[i];
             centroid[1] += position[i+1];
             centroid[2] += position[i+2];
+            posCount++;
         }
         polygons.push(positionPolygon);
     }
-    centroid = mult(centroid, 3.0/position.length);
+    GEOMETRY_STATS["triangulation_end"][GEOMETRY_STATS["triangulation_end"].length] = (new Date()).getTime();
+    centroid = mult(centroid, 1.0/ posCount);
     for (i=0; i<3; i++) center[i] = centroid[i];
    
     // compute radius of bounding sphere
@@ -426,6 +431,9 @@ var PACK_GEOMETRIES = false;
 onmessage = function(o) {
     var tileBBox = JSON.parse('['+urlQueries(o.data.request).BBOX+']');
     load(o.data.request, function(xhr) {
+        GEOMETRY_STATS["geom_start"] = (new Date()).getTime();
+        GEOMETRY_STATS["triangulation_start"] = [];
+        GEOMETRY_STATS["triangulation_end"] = [];
         var positionLength = 0;
         var geoJson = JSON.parse(xhr.responseText);
         for (var f = 0; f < geoJson.features.length; f++) {
@@ -441,7 +449,8 @@ onmessage = function(o) {
                 bbox[2] = geoJson.features[f].geometry.bbox[2];
                 bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
-            if (inTile(tileBBox, bbox)){
+            var center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+            if (pointInTile(tileBBox, center)){
                 // temporarily removed textures
                 //var texP = texRe.exec(geoJson.features[f].properties.tex);
                 // remove the texture uv from properties
@@ -475,7 +484,9 @@ onmessage = function(o) {
                 );
             }
         }
-        postMessage({workerId : o.data.workerId});
+        GEOMETRY_STATS["geom_end"] = (new Date()).getTime();
+        postMessage({workerId : o.data.workerId, stats : GEOMETRY_STATS});
+        GEOMETRY_STATS = {};
     });
 };
 
