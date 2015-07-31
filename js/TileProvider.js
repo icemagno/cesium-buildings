@@ -144,17 +144,25 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
             'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
         '}\n';
     this._fragmentShader = 
-            'uniform sampler2D u_texture;\n' +
-            'varying vec2 v_st;\n' +
-            'varying vec3 v_normal;\n' +
-            'varying vec3 v_normalEC;\n' +
-            'void main() \n' +
-            '{\n' +
-                'gl_FragColor.rgb = vec3(max(0.0, dot(v_normalEC, czm_sunDirectionEC))) + vec3(.5);\n' +
-                'gl_FragColor.a = 1.0;\n' +
-
-                'gl_FragData[1] = vec4(v_normal*.5 + vec3(.5), 1.0);\n' +
-            '}\n';
+        'uniform sampler2D u_texture;\n' +
+        'varying vec2 v_st;\n' +
+        'varying vec3 v_normal;\n' +
+        'varying vec3 v_normalEC;\n' +
+        'void main() \n' +
+        '{\n' +
+            'czm_materialInput materialInput;\n' +
+            'materialInput.s = v_st.s;\n' +
+            'materialInput.st = v_st;\n' +
+            'materialInput.str = vec3(v_st, 0.0);\n' +
+            'materialInput.normalEC = v_normalEC;\n' +
+            'czm_material material = czm_getMaterial(materialInput);\n' +
+            'vec3 diffuse = material.diffuse;\n' +
+            //'vec3 diffuse = vec3(0.0,0.0,1.0);\n' +
+            'gl_FragColor = vec4(material.diffuse*(0.5+czm_getLambertDiffuse(normalize(v_normalEC), czm_sunDirectionEC)) + material.emission, 1.0);\n' +
+            //'gl_FragColor.rgb = diffuse*max(0.0, dot(v_normalEC, czm_sunDirectionEC)) + vec3(.5);\n' +
+            //'gl_FragColor.a = 1.0;\n' +
+            'gl_FragData[1] = vec4(v_normal*.5 + vec3(.5), 1.0);\n' +
+        '}\n';
 }
 
 Object.defineProperties(WfsTileProvider.prototype, {

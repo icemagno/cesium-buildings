@@ -173,12 +173,10 @@ var thematicOn = false;
                 return new Cesium.Material({
                     fabric : {
                         type : 'DiffuseMap',
-                        uniforms : {
-                            components : {
-                                diffuse :  'vec3(1.,1.,1.)',
-                                specular : '0.1'
-                            }
-                        }
+                        components : {
+                            diffuse :  'vec3(1.0,1.0,1.0)',
+                            specular : '0.1'
+                          }
                     }
                 });
             });
