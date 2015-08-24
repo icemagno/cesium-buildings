@@ -530,6 +530,8 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     }
 
     var that = this;
+    var geomArray = [];
+   //var properties = [];
 
     var request = this._url+
             '?SERVICE=WFS'+
@@ -564,27 +566,33 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
             else {
                 transformationMatrix = m2;
             }
-            var properties = JSON.parse(w.data.geom.properties);
-            properties.tileX = tile.x;
-            properties.tileY = tile.y;
-            var prim = new Cesium.Primitive({
-                modelMatrix : transformationMatrix,
-                geometryInstances: new Cesium.GeometryInstance({
+            var idx = geomArray.length;
+            geomArray[idx] = new Cesium.GeometryInstance({
+                    modelMatrix : transformationMatrix,
                     geometry: geometryFromArrays(w.data.geom)
-                }),
-                //releaseGeometryInstances: false,
-                appearance : new Cesium.MaterialAppearance({
-                    material : that._materialFunction(properties),
-                    vertexShaderSource : that._vertexShader,
-                    fragmentShaderSource : that._fragmentShader
-                }),
-                asynchronous : false
-            });
-            prim.properties = properties;
-            that._cachedPrimitives[key].push({bbox:w.data.geom.bbox, primitive:prim});
-            tile.data.primitive.add(prim);
+                });
+            /*properties[idx] = JSON.parse(w.data.geom.properties);
+            properties[idx].tileX = tile.x;
+            properties[idx].tileY = tile.y;*/
             return;
         }
+        var properties = {};
+        properties.tileX = tile.x;
+        properties.tileY = tile.y;
+        var prim = new Cesium.Primitive({
+            geometryInstances: geomArray,
+            //releaseGeometryInstances: false,
+            appearance : new Cesium.MaterialAppearance({
+                material : that._materialFunction(properties),
+                vertexShaderSource : that._vertexShader,
+                fragmentShaderSource : that._fragmentShader
+            }),
+            asynchronous : false
+        });
+        prim.properties = properties;
+        that._cachedPrimitives[key].push({/*bbox:w.data.geom.bbox,*/ primitive:prim});
+        tile.data.primitive.add(prim);
+
         that._workerPool.releaseWorker(w.data.workerId);
         tile.data.primitive.update(context, frameState, []);
         tile.state = Cesium.QuadtreeTileLoadState.DONE;
