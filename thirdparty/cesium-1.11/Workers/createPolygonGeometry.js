@@ -26777,7 +26777,7 @@ define('Core/PolygonGeometry',[
         var originalWindingOrder = PolygonPipeline.computeWindingOrder2D(positions2D);
         if (originalWindingOrder === WindingOrder.CLOCKWISE) {
             positions2D.reverse();
-            positions.reverse();
+            positions = positions.slice().reverse();
         }
 
         var indices = PolygonPipeline.triangulate(positions2D);
@@ -27165,7 +27165,7 @@ define('Core/PolygonGeometry',[
 
         var windingOrder = PolygonPipeline.computeWindingOrder2D(positions2D);
         if (windingOrder === WindingOrder.CLOCKWISE) {
-            outerRing.reverse();
+            outerRing = outerRing.slice().reverse();
         }
 
         var wallGeo = computeWallIndices(outerRing, ellipsoid, granularity, perPositionHeight);
@@ -27182,7 +27182,7 @@ define('Core/PolygonGeometry',[
 
             windingOrder = PolygonPipeline.computeWindingOrder2D(positions2D);
             if (windingOrder === WindingOrder.COUNTER_CLOCKWISE) {
-                hole.reverse();
+                hole = hole.slice().reverse();
             }
 
             wallGeo = computeWallIndices(hole, ellipsoid, granularity);

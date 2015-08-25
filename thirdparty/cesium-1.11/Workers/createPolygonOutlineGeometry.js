@@ -26105,7 +26105,7 @@ define('Core/PolygonOutlineGeometry',[
         var originalWindingOrder = PolygonPipeline.computeWindingOrder2D(positions2D);
         if (originalWindingOrder === WindingOrder.CLOCKWISE) {
             positions2D.reverse();
-            positions.reverse();
+            positions = positions.slice().reverse();
         }
 
         var subdividedPositions;
@@ -26174,7 +26174,7 @@ define('Core/PolygonOutlineGeometry',[
         var originalWindingOrder = PolygonPipeline.computeWindingOrder2D(positions2D);
         if (originalWindingOrder === WindingOrder.CLOCKWISE) {
             positions2D.reverse();
-            positions.reverse();
+            positions = positions.slice().reverse();
         }
 
         var subdividedPositions;

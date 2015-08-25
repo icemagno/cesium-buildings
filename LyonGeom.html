@@ -97,61 +97,6 @@ function saveStats(){
     urlContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(STATS));
     window.open(urlContent, 'Records');
 }
- 
-viewer.scene.customPostProcess = new Cesium.CustomPostProcess(
-    'uniform sampler2D u_tex;\n'+
-    'uniform sampler2D u_normalTexture;\n'+
-   // 'uniform sampler2D u_depthTexture;\n'+
-    'uniform float u_width, u_height;\n'+
-    'varying vec2 v_textureCoordinates;\n'+
-    '\n'+
-    'vec4 get_pixel(in vec2 coords, in float dx, in float dy) {\n'+
-    ' return texture2D(u_normalTexture, coords + vec2(dx, dy));\n'+
-    '}\n'+
-    '\n'+
-    '// returns pixel color\n'+
-    'float IsEdge(in vec2 coords){\n'+
-    '  float dxtex = 1.0 / u_width /*image width*/;\n'+
-    '  float dytex = 1.0 / u_height /*image height*/;\n'+
-    '  vec3 pix[9];\n'+
-    '  float delta;\n'+
-    '\n'+
-    '  // read neighboring pixel intensities\n'+
-    '  for (int i=-1; i<2; i++) {\n'+
-    '   for(int j=-1; j<2; j++) {\n'+
-    '    pix[(i+1)*3+j+1] = 2.0*(get_pixel(coords,float(i)*dxtex,\n'+
-    '                                          float(j)*dytex).rgb - vec3(.5));\n'+
-    '   }\n'+
-    '  }\n'+
-    '\n'+
-    '  // average color differences around neighboring pixels\n'+
-    '  delta =(length(cross(pix[1], pix[7]))+\n'+
-    '          length(cross(pix[5], pix[3]))+\n'+
-    '          length(cross(pix[0], pix[8]))+\n'+
-    '          length(cross(pix[2], pix[6])))/4.0;\n'+
-    '\n'+
-    '  return delta /*> .1 ? 1.0 : 0.0 */;\n'+
-    '}\n'+
-    '\n'+
-    'vec3 round(vec3 v){return floor(v+vec3(0.5));}\n' +
-    'void main()\n'+
-    '{\n'+
-    '  //vec4 color = vec4(0.0,0.0,0.0,1.0);\n'+
-    '  vec4 color = texture2D(u_tex, v_textureCoordinates);\n'+
-    '  vec4 nrml = texture2D(u_normalTexture, v_textureCoordinates);\n'+
-   // '  vec4 depth = texture2D(u_depthTexture, v_textureCoordinates);\n'+
-    //'  color.rgb = 100.0*(2.0*(color.rgb - vec3(.5)) - round(2.0*(color.rgb - vec3(.5))*100.0)/100.0);\n'+
-    //'  if ( 2.0*(color.rgb - vec3(.5)) == round(2.0*(color.rgb - vec3(.5))*100.0)/100.0 )\n'+
-    '  color.rgb -= IsEdge(v_textureCoordinates)*vec3(1.0);\n'+
-    '  color.a = 1.0;\n'+
-    '  gl_FragColor = color;\n'+
-    //'  gl_FragColor = nrml;\n'+
-    '}\n'
-    ,
-    {
-        u_width : function() { return viewer.canvas.clientWidth; },
-        u_height : function() { return viewer.canvas.clientHeight; }
-    });
 
 var thematicOn = false;
     function toggleThematic(){

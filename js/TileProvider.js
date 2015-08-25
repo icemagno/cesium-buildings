@@ -157,11 +157,7 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
             'materialInput.normalEC = v_normalEC;\n' +
             'czm_material material = czm_getMaterial(materialInput);\n' +
             'vec3 diffuse = material.diffuse;\n' +
-            //'vec3 diffuse = vec3(0.0,0.0,1.0);\n' +
             'gl_FragColor = vec4(material.diffuse*(0.5+czm_getLambertDiffuse(normalize(v_normalEC), czm_sunDirectionEC)) + material.emission, 1.0);\n' +
-            //'gl_FragColor.rgb = diffuse*max(0.0, dot(v_normalEC, czm_sunDirectionEC)) + vec3(.5);\n' +
-            //'gl_FragColor.a = 1.0;\n' +
-            'gl_FragData[1] = vec4(v_normal*.5 + vec3(.5), 1.0);\n' +
         '}\n';
 }
 

@@ -23504,7 +23504,7 @@ define('Core/WallGeometry',[
                     recomputeNormal = false;
                 }
 
-                if (Cartesian3.equalsEpsilon(nextPosition, groundPosition, CesiumMath.EPSILON6)) {
+                if (Cartesian3.equalsEpsilon(nextPosition, groundPosition, CesiumMath.EPSILON10)) {
                     recomputeNormal = true;
                 } else {
                     s += ds;
@@ -23614,7 +23614,7 @@ define('Core/WallGeometry',[
             var LR = i + 2;
             var pl = Cartesian3.fromArray(positions, LL * 3, scratchCartesian3Position1);
             var pr = Cartesian3.fromArray(positions, LR * 3, scratchCartesian3Position2);
-            if (Cartesian3.equalsEpsilon(pl, pr, CesiumMath.EPSILON6)) {
+            if (Cartesian3.equalsEpsilon(pl, pr, CesiumMath.EPSILON10)) {
                 continue;
             }
             var UL = i + 1;
