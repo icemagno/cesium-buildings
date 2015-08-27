@@ -30,16 +30,16 @@ function geometryFromArrays(data){
         values : new Float32Array(data.position.length)
     });
 
-    for (var t=0; t<attributes.position.length; t+=9){
+    for (var t=0; t<attributes.position.valueslength; t+=9){
         var i;
         for (i=0; i<9; i++){
-            attributes.center[t+i%3] += attributes.position[t+i];  
+            attributes.center.values[t+i%3] += attributes.values.position[t+i];
         }
         for (i=0; i<3; i++){
-            attributes.center[t+i%3] /= 3;
+            attributes.center.values[t+i] /= 3;
         }
     }
- 
+
     // TODO uncomment once tangent and binormals are valid
     //
     //attributes.tangent = new Cesium.GeometryAttribute({
@@ -97,17 +97,9 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
     this._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
     this._loadedBoxes = [];
     this._cachedPrimitives = {};
-    this._materialFunction = function(properties){
-        return new Cesium.Material({
-            fabric : {
-                type : 'DiffuseMap',
-                components : {
-                    diffuse :  'vec3(1.,1.,1.)',
-                    specular : '0.1'
-                }
-            }
-        });
-    };
+    this._colorFunction = function(properties){
+        return new Cesium.Color(1.0,1.0,1.0,1.0);
+    }
 
     var ws = [extent.west * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
     var en = [extent.east * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
@@ -132,6 +124,8 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
         'attribute vec3 position3DLow;\n' +
         'attribute vec3 normal;\n' +
         'attribute vec2 st;\n' +
+        'attribute vec3 color;\n' +
+        'varying vec3 v_color;\n' +
         'varying vec3 v_normal;\n' +
         'varying vec3 v_normalEC;\n' +
         'varying vec2 v_st;\n' +
@@ -141,6 +135,7 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
             'v_normal = normal;\n' +
             'v_normalEC = czm_normal * normal;\n' +
             'v_st = st;\n' +
+            'v_color = color;\n' +
             'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
         '}\n';
     this._fragmentShader = 
@@ -148,6 +143,8 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
         'varying vec2 v_st;\n' +
         'varying vec3 v_normal;\n' +
         'varying vec3 v_normalEC;\n' +
+        'varying float v_featureIndex;\n' +
+        'varying vec3 v_color;\n' +
         'void main() \n' +
         '{\n' +
             'czm_materialInput materialInput;\n' +
@@ -156,9 +153,9 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
             'materialInput.str = vec3(v_st, 0.0);\n' +
             'materialInput.normalEC = v_normalEC;\n' +
             'czm_material material = czm_getMaterial(materialInput);\n' +
-            'vec3 diffuse = material.diffuse;\n' +
+            'vec3 diffuse = v_color;//material.diffuse;\n' +
             //'vec3 diffuse = vec3(0.0,0.0,1.0);\n' +
-            'gl_FragColor = vec4(material.diffuse*(0.5+czm_getLambertDiffuse(normalize(v_normalEC), czm_sunDirectionEC)) + material.emission, 1.0);\n' +
+            'gl_FragColor = /*vec4(vec3(abs(gl_FragCoord.z)), 1.0);//*/vec4(diffuse*(0.5+czm_getLambertDiffuse(normalize(v_normalEC), czm_sunDirectionEC)) + material.emission, 1.0);\n' +
             //'gl_FragColor.rgb = diffuse*max(0.0, dot(v_normalEC, czm_sunDirectionEC)) + vec3(.5);\n' +
             //'gl_FragColor.a = 1.0;\n' +
             'gl_FragData[1] = vec4(v_normal*.5 + vec3(.5), 1.0);\n' +
@@ -531,7 +528,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
 
     var that = this;
     var geomArray = [];
-   //var properties = [];
+    var properties = [];
 
     var request = this._url+
             '?SERVICE=WFS'+
@@ -567,23 +564,39 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 transformationMatrix = m2;
             }
             var idx = geomArray.length;
+            var geomProperties = {};
+            geomProperties.featureIndex = idx;
+            geomProperties.tileX = tile.x;
+            geomProperties.tileY = tile.y;
+
+            geomProperties.color = that._colorFunction(geomProperties);
+            w.data.geom.color = geomProperties.color;
+            properties.push(geomProperties);
+            var attributes = {color : new Cesium.ColorGeometryInstanceAttribute(geomProperties.color.red, geomProperties.color.green, geomProperties.color.blue)};
             geomArray[idx] = new Cesium.GeometryInstance({
-                    modelMatrix : transformationMatrix,
-                    geometry: geometryFromArrays(w.data.geom)
-                });
+                modelMatrix : transformationMatrix,
+                geometry : geometryFromArrays(w.data.geom),
+                id : idx,
+                attributes : attributes
+            });
             /*properties[idx] = JSON.parse(w.data.geom.properties);
             properties[idx].tileX = tile.x;
             properties[idx].tileY = tile.y;*/
             return;
         }
-        var properties = {};
-        properties.tileX = tile.x;
-        properties.tileY = tile.y;
         var prim = new Cesium.Primitive({
             geometryInstances: geomArray,
             //releaseGeometryInstances: false,
             appearance : new Cesium.MaterialAppearance({
-                material : that._materialFunction(properties),
+                material : new Cesium.Material({
+                    fabric : {
+                        type : 'DiffuseMap',
+                        components : {
+                            diffuse :  'vec3(0.5,0.,1.)',
+                            specular : '0.1'
+                        }
+                    }
+                }),
                 vertexShaderSource : that._vertexShader,
                 fragmentShaderSource : that._fragmentShader
             }),
@@ -653,20 +666,19 @@ WfsTileProvider.prototype.boxLoaded = function(bbox){
     loadedBoxes.push(bbox);
 };
 
-/* the function must return a material to be applied to each feature
- * the function recieve one parameter which is the feature attributes
- */
-WfsTileProvider.prototype.setMaterialFunction = function(materialFunction){
-    this._materialFunction = materialFunction;
+WfsTileProvider.prototype.setColorFunction = function(colorFunction){
+    this._colorFunction = colorFunction;
     var cached = this._cachedPrimitives;
     // update cached primitives
     for(var t in cached) {
         for(var p = 0; p < cached[t].length; p++) {
-            cached[t][p].primitive.appearance = new Cesium.MaterialAppearance({
-                material : materialFunction(cached[t][p].primitive.properties),
-                vertexShaderSource : this._vertexShader,
-                fragmentShaderSource : this._fragmentShader
-            });
+            var prim = cached[t][p].primitive;
+            for(var i = 0; i < prim.properties.length; i++) {
+                var attributes = prim.getGeometryInstanceAttributes(i);
+                var color = colorFunction(prim.properties[i]);
+                prim.properties[i].color = color;
+                attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(color);
+            }
         }
     }
 }

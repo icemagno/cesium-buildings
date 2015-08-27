@@ -74,17 +74,6 @@ viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tilePro
 var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
 viewer.camera.viewRectangle(cameraView);
 viewer.camera.lookUp(0.5);
-tileProvider.setMaterialFunction(function(properties){
-    return new Cesium.Material({
-        fabric : {
-            type : 'DiffuseMap',
-            components : {
-                diffuse :  'vec3(1,1,1)',
-                specular : '0.1'
-            }
-        }
-    });
-});
 
 // Imagery
 var provider = new Cesium.WebMapServiceImageryProvider({
@@ -156,29 +145,14 @@ viewer.scene.customPostProcess = new Cesium.CustomPostProcess(
 var thematicOn = false;
     function toggleThematic(){
         if (!thematicOn){
-            tileProvider.setMaterialFunction(function(properties){
-                return new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        components : {
-                            diffuse : (properties.tileX + properties.tileY) % 2 ? 'vec3(0.5,0.5,0)' : 'vec3(0,0.5,0.5)',
-                            specular : '0.1'
-                        }
-                    }
-                });
+            tileProvider.setColorFunction(function(properties){
+                return (properties.tileX + properties.tileY) % 2 ? new Cesium.Color(0.5 + 0.25 * (properties.featureIndex % 10) / 10.0,0.5 - 0.25 * (properties.featureIndex % 10) / 10.0,0,1.0) :
+                                                                   new Cesium.Color(0,0.5 + 0.25 * (properties.featureIndex % 10) / 10.0,0.5 - 0.25 * (properties.featureIndex % 10) / 10.0,1.0);
             });
             thematicOn = true;
         } else {
-            tileProvider.setMaterialFunction(function(properties){
-                return new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        components : {
-                            diffuse :  'vec3(1.0,1.0,1.0)',
-                            specular : '0.1'
-                          }
-                    }
-                });
+            tileProvider.setColorFunction(function(properties){
+                return  new Cesium.Color(1.0,1.0,1.0,1.0);
             });
             thematicOn = false;
         }
