@@ -172,8 +172,13 @@ var thematicOn = false;
     }
 
     var handler;
+    var restore;
     function toggleHighlight(){
-        var restore;
+        function restoreColor(){
+            if(restore) {
+                restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(restore.primitive.properties[restore.id].color);
+            }
+        }
         if (!Cesium.defined(handler)){
             // If the mouse is over a feature, change its color to yellow
             var pickingInProgress = false;
@@ -186,48 +191,28 @@ var thematicOn = false;
                     && Cesium.defined(pickedObject.primitive) 
                     && Cesium.defined(pickedObject.primitive.properties) ) {
 
-                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive){
-                        if (Cesium.defined(restore)){
-                            restore.primitive.appearance = restore.appearance;
-                        }
+                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive || pickedObject.primitive.id != restore.id){
+                        restoreColor();
                         restore = {
                             primitive:pickedObject.primitive, 
-                            appearance:pickedObject.primitive.appearance
+                            id:pickedObject.id,
+                            attributes:pickedObject.primitive.getGeometryInstanceAttributes(pickedObject.id)
                         };
 
-                        var mat = new Cesium.Material({
-                            fabric : {
-                                type : 'DiffuseMap',
-                                components : {
-                                    diffuse : 'vec3(1.,1.,0)',
-                                    alpha : '1.'
-                                }
-                            }
-                        });
-
-                        pickedObject.primitive.appearance = new Cesium.MaterialAppearance({
-                                    material : mat, 
-                                    faceForward : true
-                                  });
+                        restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(new Cesium.Color(1., 1., 0.));
                     }
 
                 } else {
-                    if (Cesium.defined(restore)){
-                        restore.primitive.appearance = restore.appearance;
-                        restore = undefined;
-                    }
+                    restoreColor();
                 }
                 pickingInProgress = false;
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         } else {
-            if (Cesium.defined(restore)){
-                restore.primitive.appearance = restore.appearance;
-                restoreApearance = undefined;
-            }
+            restoreColor();
             handler.destroy();
             handler = undefined;
         }
-        }
+    }
 
   </script>
 </body>

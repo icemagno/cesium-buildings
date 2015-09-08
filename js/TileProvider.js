@@ -528,7 +528,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
 
     var that = this;
     var geomArray = [];
-    var properties = [];
+    var properties = {};
 
     var request = this._url+
             '?SERVICE=WFS'+
@@ -541,7 +541,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
 
     this._workerPool.enqueueJob({request : request}, function(w){
         if (tile.data.primitive === undefined){
-            if(w.data.geometry !== undefined) return;   // TODO : cancel request in stead of waiting for its completion
+            if(w.data.geom !== undefined) return;   // TODO : cancel request in stead of waiting for its completion
             // tile suppressed while we waited for reply
             // receive messages from worker until done
             that._workerPool.releaseWorker(w.data.workerId);
@@ -565,18 +565,18 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
             }
             var idx = geomArray.length;
             var geomProperties = {};
-            geomProperties.featureIndex = idx;
+            geomProperties.featureIndex = w.data.geom.gid;
             geomProperties.tileX = tile.x;
             geomProperties.tileY = tile.y;
 
             geomProperties.color = that._colorFunction(geomProperties);
             w.data.geom.color = geomProperties.color;
-            properties.push(geomProperties);
+            properties[geomProperties.featureIndex] = geomProperties;
             var attributes = {color : new Cesium.ColorGeometryInstanceAttribute(geomProperties.color.red, geomProperties.color.green, geomProperties.color.blue)};
             geomArray[idx] = new Cesium.GeometryInstance({
                 modelMatrix : transformationMatrix,
                 geometry : geometryFromArrays(w.data.geom),
-                id : idx,
+                id : geomProperties.featureIndex,
                 attributes : attributes
             });
             /*properties[idx] = JSON.parse(w.data.geom.properties);
@@ -673,7 +673,7 @@ WfsTileProvider.prototype.setColorFunction = function(colorFunction){
     for(var t in cached) {
         for(var p = 0; p < cached[t].length; p++) {
             var prim = cached[t][p].primitive;
-            for(var i = 0; i < prim.properties.length; i++) {
+            for(var i in prim.properties) {//for(var i = 0; i < prim.properties.length; i++) {
                 var attributes = prim.getGeometryInstanceAttributes(i);
                 var color = colorFunction(prim.properties[i]);
                 prim.properties[i].color = color;
