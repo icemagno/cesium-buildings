@@ -50,7 +50,7 @@
   <div id="info"></div>
   <script>
 
-var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
+var viewer = new Cesium.Viewer('cesiumContainer'/*, {baseLayerPicker : false, scene3DOnly : true}*/);
 
 
 var texture_dir = "../w/textures/"
@@ -77,6 +77,7 @@ viewer.camera.lookUp(0.5);
 
 // Imagery
 var provider = new Cesium.WebMapServiceImageryProvider({
+    enablePickFeatures : false,
     url: 'https://download.data.grandlyon.com/wms/grandlyon',
     layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
 });
@@ -146,8 +147,8 @@ var thematicOn = false;
     function toggleThematic(){
         if (!thematicOn){
             tileProvider.setColorFunction(function(properties){
-                return (properties.tileX + properties.tileY) % 2 ? new Cesium.Color(0.5 + 0.25 * (properties.featureIndex % 10) / 10.0,0.5 - 0.25 * (properties.featureIndex % 10) / 10.0,0,1.0) :
-                                                                   new Cesium.Color(0,0.5 + 0.25 * (properties.featureIndex % 10) / 10.0,0.5 - 0.25 * (properties.featureIndex % 10) / 10.0,1.0);
+                return (properties.tileX + properties.tileY) % 2 ? new Cesium.Color(0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,0,1.0) :
+                                                                   new Cesium.Color(0,0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,1.0);
             });
             thematicOn = true;
         } else {
@@ -173,6 +174,7 @@ var thematicOn = false;
 
     var handler;
     var restore;
+    var entity = new Cesium.Entity({name : 'Title to put in the infobox'});
     function toggleHighlight(){
         function restoreColor(){
             if(restore) {
@@ -198,21 +200,37 @@ var thematicOn = false;
                             id:pickedObject.id,
                             attributes:pickedObject.primitive.getGeometryInstanceAttributes(pickedObject.id)
                         };
+                        entity.description = {
+                            getValue : function() {
+                                var properties = restore.primitive.properties[restore.id];
+                                var string = "<table>";
+                                for(var p in properties) {
+                                  string += "<tr> <th>" + p + "</th><th>" + properties[p] + "</th></tr>";
+                                }
+                                string += "</table>"
+                                return string;
+                            }
+                        };
+                        viewer.selectedEntity = entity;
 
                         restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(new Cesium.Color(1., 1., 0.));
                     }
 
                 } else {
                     restoreColor();
+                    viewer.selectedEntity = undefined;
                 }
-                pickingInProgress = false;
+                pickingInProgress = undefined;
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         } else {
             restoreColor();
+            viewer.selectedEntity = noEntity;
             handler.destroy();
             handler = undefined;
         }
     }
+
+
 
   </script>
 </body>

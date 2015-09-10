@@ -500,7 +500,6 @@ onmessage = function(o) {
                 // add attributes
                 geom.properties = JSON.stringify(geoJson.features[f].properties);
                 geom.bbox = bbox;
-                geom.gid = geoJson.features[f].properties.gid;
                 positionLength += geom.position.length;
 
                 postMessage({geom: geom, workerId : o.data.workerId},

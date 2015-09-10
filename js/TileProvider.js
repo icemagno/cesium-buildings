@@ -565,18 +565,17 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
             }
             var idx = geomArray.length;
             var geomProperties = JSON.parse(w.data.geom.properties);
-            geomProperties.featureIndex = w.data.geom.gid;
             geomProperties.tileX = tile.x;
             geomProperties.tileY = tile.y;
 
             geomProperties.color = that._colorFunction(geomProperties);
             w.data.geom.color = geomProperties.color;
-            properties[geomProperties.featureIndex] = geomProperties;
+            properties[geomProperties.gid] = geomProperties;
             var attributes = {color : new Cesium.ColorGeometryInstanceAttribute(geomProperties.color.red, geomProperties.color.green, geomProperties.color.blue)};
             geomArray[idx] = new Cesium.GeometryInstance({
                 modelMatrix : transformationMatrix,
                 geometry : geometryFromArrays(w.data.geom),
-                id : geomProperties.featureIndex,
+                id : geomProperties.gid,
                 attributes : attributes
             });
             /*properties[idx] = JSON.parse(w.data.geom.properties);
