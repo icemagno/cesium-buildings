@@ -564,7 +564,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 transformationMatrix = m2;
             }
             var idx = geomArray.length;
-            var geomProperties = {};
+            var geomProperties = JSON.parse(w.data.geom.properties);
             geomProperties.featureIndex = w.data.geom.gid;
             geomProperties.tileX = tile.x;
             geomProperties.tileY = tile.y;
