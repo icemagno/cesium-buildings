@@ -50,12 +50,9 @@
   <script>
 
 var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
-
-
-var texture_dir = "../w/textures/"
+viewer.scene.globe.depthTestAgainstTerrain = true;
 
 // terrain
-viewer.scene.globe.depthTestAgainstTerrain = true;
 var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
     url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
 });
@@ -66,10 +63,10 @@ var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.7899
 var tileProvider = new WfsTileProvider(
                        'http://192.168.56.101/cgi-bin/tinyows',
                        'tows:roofs', 
-                       'http://192.168.56.101/cesium-buildings-data',
                        rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 
+// Camera placement
 var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
 viewer.camera.viewRectangle(cameraView);
 viewer.camera.lookUp(0.5);
@@ -81,16 +78,109 @@ var provider = new Cesium.WebMapServiceImageryProvider({
     layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
 });
 viewer.imageryLayers.addImageryProvider(provider);
-
-function saveStats(){
-    urlContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(STATS));
-    window.open(urlContent, 'Records');
-}
  
+
+// Thematic coloring: coloration by NO2 value
+    var thematicOn = false;
+    function toggleThematic(){
+        if (!thematicOn){
+            tileProvider.setColorFunction(function(properties){
+                return new Cesium.Color(properties.no2_red / 255., properties.no2_green / 255., properties.no2_blue / 255.);
+            });
+            thematicOn = true;
+        } else {
+            tileProvider.setColorFunction(function(properties){
+                return  new Cesium.Color(1.0,1.0,1.0,1.0);
+            });
+            thematicOn = false;
+        }
+    }
+
+// Layer switch
+    var osmLayer;
+    function toggleOsm(){
+        if (!Cesium.defined(osmLayer)){
+            osmLayer = viewer.scene.imageryLayers.addImageryProvider(
+                new Cesium.OpenStreetMapImageryProvider({
+                  url : '//a.tile.openstreetmap.org/'
+                  }));
+        } else {
+            viewer.scene.imageryLayers.remove(osmLayer);
+            osmLayer = undefined;
+        }
+    }
+
+// Highlight and attribute retrieval
+    var handler;
+    var restore;
+    var entity = new Cesium.Entity({name : 'Attributes'});
+    var print_attributes = function() {
+        var properties = restore.primitive.properties[restore.id];
+        var string = "<table>";
+        for(var p in properties) {
+            // filtering properties
+            if(p == "gid" || p == "hfacade") {
+                string += "<tr> <th>" + p + "</th><th>" + properties[p] + "</th></tr>";
+            }
+            if(p == "no2_green") {
+                 var no2 = properties[p];
+                 no2 = 30 + (no2 - 25) * 10 / 115; // rough approximation
+                 string += "<tr> <th>NO2</th><th>" + no2.toFixed(2) + "µg.m^-3</th></tr>";
+            }
+        }
+        string += "</table>"
+        return string;
+    }
+    function toggleHighlight(){
+        function restoreColor(){
+            if(restore) {
+                restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(restore.primitive.properties[restore.id].color);
+            }
+        }
+        if (!Cesium.defined(handler)){
+            // If the mouse is over a feature, change its color to yellow
+            var pickingInProgress = false;
+            handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+            handler.setInputAction(function(movement) {
+                if (pickingInProgress) return;
+                pickingInProgress = true;
+                var pickedObject = viewer.scene.pick(movement.endPosition);
+                if (Cesium.defined(pickedObject) 
+                    && Cesium.defined(pickedObject.primitive) 
+                    && Cesium.defined(pickedObject.primitive.properties) ) {
+
+                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive || pickedObject.primitive.id != restore.id){
+                        restoreColor();
+                        restore = {
+                            primitive:pickedObject.primitive, 
+                            id:pickedObject.id,
+                            attributes:pickedObject.primitive.getGeometryInstanceAttributes(pickedObject.id)
+                        };
+                        entity.description = {
+                            getValue : print_attributes
+                        };
+                        viewer.selectedEntity = entity;
+
+                        restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(new Cesium.Color(1., 1., 0.));
+                    }
+
+                } else {
+                    restoreColor();
+                    viewer.selectedEntity = undefined;
+                }
+                pickingInProgress = false;
+            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        } else {
+            restoreColor();
+            viewer.selectedEntity = undefined;
+            handler.destroy();
+            handler = undefined;
+        }
+    }
+
 viewer.scene.customPostProcess = new Cesium.CustomPostProcess(
     'uniform sampler2D u_tex;\n'+
     'uniform sampler2D u_normalTexture;\n'+
-   // 'uniform sampler2D u_depthTexture;\n'+
     'uniform float u_width, u_height;\n'+
     'varying vec2 v_textureCoordinates;\n'+
     '\n'+
@@ -128,112 +218,15 @@ viewer.scene.customPostProcess = new Cesium.CustomPostProcess(
     '  //vec4 color = vec4(0.0,0.0,0.0,1.0);\n'+
     '  vec4 color = texture2D(u_tex, v_textureCoordinates);\n'+
     '  vec4 nrml = texture2D(u_normalTexture, v_textureCoordinates);\n'+
-   // '  vec4 depth = texture2D(u_depthTexture, v_textureCoordinates);\n'+
-    //'  color.rgb = 100.0*(2.0*(color.rgb - vec3(.5)) - round(2.0*(color.rgb - vec3(.5))*100.0)/100.0);\n'+
-    //'  if ( 2.0*(color.rgb - vec3(.5)) == round(2.0*(color.rgb - vec3(.5))*100.0)/100.0 )\n'+
     '  color.rgb -= IsEdge(v_textureCoordinates)*vec3(1.0);\n'+
     '  color.a = 1.0;\n'+
     '  gl_FragColor = color;\n'+
-    //'  gl_FragColor = nrml;\n'+
     '}\n'
     ,
     {
         u_width : function() { return viewer.canvas.clientWidth; },
         u_height : function() { return viewer.canvas.clientHeight; }
     });
-
-var thematicOn = false;
-    function toggleThematic(){
-        if (!thematicOn){
-            tileProvider.setColorFunction(function(properties){
-                return new Cesium.Color(properties.no2_red / 255., properties.no2_green / 255., properties.no2_blue / 255.);
-            });
-            thematicOn = true;
-        } else {
-            tileProvider.setColorFunction(function(properties){
-                return  new Cesium.Color(1.0,1.0,1.0,1.0);
-            });
-            thematicOn = false;
-        }
-    }
-
-    var osmLayer;
-    function toggleOsm(){
-        if (!Cesium.defined(osmLayer)){
-            osmLayer = viewer.scene.imageryLayers.addImageryProvider(
-                new Cesium.OpenStreetMapImageryProvider({
-                  url : '//a.tile.openstreetmap.org/'
-                  }));
-        } else {
-            viewer.scene.imageryLayers.remove(osmLayer);
-            osmLayer = undefined;
-        }
-    }
-
-    var handler;
-    var restore;
-    var entity = new Cesium.Entity({name : 'Attributes'});
-    function toggleHighlight(){
-        function restoreColor(){
-            if(restore) {
-                restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(restore.primitive.properties[restore.id].color);
-            }
-        }
-        if (!Cesium.defined(handler)){
-            // If the mouse is over a feature, change its color to yellow
-            var pickingInProgress = false;
-            handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-            handler.setInputAction(function(movement) {
-                if (pickingInProgress) return;
-                pickingInProgress = true;
-                var pickedObject = viewer.scene.pick(movement.endPosition);
-                if (Cesium.defined(pickedObject) 
-                    && Cesium.defined(pickedObject.primitive) 
-                    && Cesium.defined(pickedObject.primitive.properties) ) {
-
-                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive || pickedObject.primitive.id != restore.id){
-                        restoreColor();
-                        restore = {
-                            primitive:pickedObject.primitive, 
-                            id:pickedObject.id,
-                            attributes:pickedObject.primitive.getGeometryInstanceAttributes(pickedObject.id)
-                        };
-                        entity.description = {
-                            getValue : function() {
-                                var properties = restore.primitive.properties[restore.id];
-                                var string = "<table>";
-                                for(var p in properties) {
-                                  if(p == "gid" || p == "hfacade") {
-                                    string += "<tr> <th>" + p + "</th><th>" + properties[p] + "</th></tr>";
-                                  }
-                                  if(p == "no2_green") {
-                                    var no2 = properties[p];
-                                    no2 = 30 + (no2 - 25) * 10 / 115; // rough approximation
-                                    string += "<tr> <th>NO2</th><th>" + no2.toFixed(2) + "µg.m^-3</th></tr>";
-                                  }
-                                }
-                                string += "</table>"
-                                return string;
-                            }
-                        };
-                        viewer.selectedEntity = entity;
-
-                        restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(new Cesium.Color(1., 1., 0.));
-                    }
-
-                } else {
-                    restoreColor();
-                    viewer.selectedEntity = undefined;
-                }
-                pickingInProgress = false;
-            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-        } else {
-            restoreColor();
-            viewer.selectedEntity = noEntity;
-            handler.destroy();
-            handler = undefined;
-        }
-    }
 
   </script>
 </body>

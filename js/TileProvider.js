@@ -71,7 +71,7 @@ function geometryFromArrays(data){
 
 /* The tile will be empty if the tile size (north->south) is below minSize or above maxsize
  */
-function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadDistance){
+function WfsTileProvider(url, layerName, extent, tileSize, loadDistance){
     this._quadtree = undefined;
     this._errorEvent = new Cesium.Event();
 
