@@ -44,7 +44,6 @@
     <button type="button" onclick="toggleThematic()">toggle thematic coloring</button> 
     <button type="button" onclick="toggleHighlight()">toggle highlight on mouseover</button> 
     <button type="button" onclick="toggleOsm()">toggle OSM background</button>
-    <button type="button" onclick="saveStats()">save stats</button>
   </div>
   <br/><br/>
   <div id="info"></div>
@@ -65,9 +64,9 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider(
-                       'http://ks29236.kimsufi.com/cgi-bin/tinyows',
-                       'tows:lyongeom', 
-                       'http://ks29236.kimsufi.com/cesium-buildings-data',
+                       'http://192.168.56.101/cgi-bin/tinyows',
+                       'tows:citygml', 
+                       'http://192.168.56.101/cesium-buildings-data',
                        rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 

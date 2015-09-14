@@ -94,7 +94,7 @@ function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadD
     this._url = url;
     this._layerName = layerName;
     //this._textureBaseUrl = textureBaseUrl+'/';
-    this._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
+    this._workerPool = new WorkerPool(1, 'js/createWfsGeometry.js');
     this._loadedBoxes = [];
     this._cachedPrimitives = {};
     this._colorFunction = function(properties){
