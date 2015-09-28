@@ -306,6 +306,36 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
             }
         }
         var triangles = earcut(positionPolygon2D);
+        // reordering traingle points for correct normal computation
+        for (v = 0; v < triangles.length; v+=3){
+            var v1 = triangles[v];
+            var v2 = triangles[v+1];
+            var v3 = triangles[v+2];
+            if(v1 > v2 && v1 > v3) {
+                triangles[v+2] = v1;
+                if(v2 > v3) {
+                    triangles[v] = v3;
+                    triangles[v+1] = v2;
+                } else {
+                    triangles[v] = v2;
+                    triangles[v+1] = v3;
+                }
+            } else if(v1 > v2) {
+                triangles[v] = v2;
+                triangles[v+1] = v1;
+                triangles[v+2] = v3;
+            } else if(v1 > v3) {
+                triangles[v] = v3;
+                triangles[v+1] = v1;
+                triangles[v+2] = v2;
+            } else {
+                if(v2 > v3) {
+                    triangles[v] = v1;
+                    triangles[v+1] = v3;
+                    triangles[v+2] = v2;
+                }
+            }
+        }
         for (v = 0; v < triangles.length; v++, i+=3){
             position[i] = positionPolygon[3*triangles[v]];
             position[i+1] = positionPolygon[3*triangles[v]+1];
@@ -322,14 +352,14 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     for (i=0; i<3; i++) center[i] = centroid[i];
    
     // compute radius of bounding sphere
-    for (v=0; v<position.length; v+=3){
+    for (v=0; v<posCount*3; v+=3){
         radius = Math.max(radius, normsq(minus(
                         [position[v], position[v+1], position[v+2]], centroid)));
     }
     radius = Math.sqrt(radius);
 
     // compute normals
-    for (t=0; t<position.length; t+=9){
+    for (t=0; t<posCount*3; t+=9){
         U = minus([position[t+3], position[t+4],position[t+5]], 
                   [position[t  ], position[t+1],position[t+2]]);
         V = minus([position[t+6], position[t+7],position[t+8]], 
@@ -337,7 +367,11 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
         N = cross(U, V);
         N = mult(N, 1.0/norm(N));
         for (i=0; i<9; i++) normal[t+i] = N[i%3];
-    } 
+    }
+    for(; t < position.length; t+=9) {
+        N = [1.0,0.0,0.0];
+        for (i=0; i<9; i++) normal[t+i] = N[i%3];        
+    }
 
     // set st
     /*for (i=0, t=0; t<textureCoord.length; t+=4, i+=6){ // 4 vtx per triangles
@@ -466,7 +500,6 @@ onmessage = function(o) {
                 // add attributes
                 geom.properties = JSON.stringify(geoJson.features[f].properties);
                 geom.bbox = bbox;
-                geom.gid = geoJson.features[f].properties.gid;
                 positionLength += geom.position.length;
 
                 postMessage({geom: geom, workerId : o.data.workerId},

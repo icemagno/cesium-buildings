@@ -50,7 +50,7 @@
   <div id="info"></div>
   <script>
 
-var viewer = new Cesium.Viewer('cesiumContainer', {baseLayerPicker : false, scene3DOnly : true});
+var viewer = new Cesium.Viewer('cesiumContainer'/*, {baseLayerPicker : false, scene3DOnly : true}*/);
 
 
 var texture_dir = "../w/textures/"
@@ -65,29 +65,19 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider(
-                       'http://ks29236.kimsufi.com/cgi-bin/tinyows',
+                       'http://ns379426.ip-37-187-164.eu/cgi-bin/tinyows',
                        'tows:lyongeom', 
-                       'http://ks29236.kimsufi.com/cesium-buildings-data',
+                       'http://ns379426.ip-37-187-164.eu/cesium-buildings-data',
                        rectangle, 500, 3);
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 
 var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
 viewer.camera.viewRectangle(cameraView);
 viewer.camera.lookUp(0.5);
-tileProvider.setMaterialFunction(function(properties){
-    return new Cesium.Material({
-        fabric : {
-            type : 'DiffuseMap',
-            components : {
-                diffuse :  'vec3(1,1,1)',
-                specular : '0.1'
-            }
-        }
-    });
-});
 
 // Imagery
 var provider = new Cesium.WebMapServiceImageryProvider({
+    enablePickFeatures : false,
     url: 'https://download.data.grandlyon.com/wms/grandlyon',
     layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
 });
@@ -101,29 +91,14 @@ function saveStats(){
 var thematicOn = false;
     function toggleThematic(){
         if (!thematicOn){
-            tileProvider.setMaterialFunction(function(properties){
-                return new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        components : {
-                            diffuse : (properties.tileX + properties.tileY) % 2 ? 'vec3(0.5,0.5,0)' : 'vec3(0,0.5,0.5)',
-                            specular : '0.1'
-                        }
-                    }
-                });
+            tileProvider.setColorFunction(function(properties){
+                return (properties.tileX + properties.tileY) % 2 ? new Cesium.Color(0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,0,1.0) :
+                                                                   new Cesium.Color(0,0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,1.0);
             });
             thematicOn = true;
         } else {
-            tileProvider.setMaterialFunction(function(properties){
-                return new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        components : {
-                            diffuse :  'vec3(1.0,1.0,1.0)',
-                            specular : '0.1'
-                          }
-                    }
-                });
+            tileProvider.setColorFunction(function(properties){
+                return  new Cesium.Color(1.0,1.0,1.0,1.0);
             });
             thematicOn = false;
         }
@@ -143,8 +118,14 @@ var thematicOn = false;
     }
 
     var handler;
+    var restore;
+    var entity = new Cesium.Entity({name : 'Title to put in the infobox'});
     function toggleHighlight(){
-        var restore;
+        function restoreColor(){
+            if(restore) {
+                restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(restore.primitive.properties[restore.id].color);
+            }
+        }
         if (!Cesium.defined(handler)){
             // If the mouse is over a feature, change its color to yellow
             var pickingInProgress = false;
@@ -157,48 +138,44 @@ var thematicOn = false;
                     && Cesium.defined(pickedObject.primitive) 
                     && Cesium.defined(pickedObject.primitive.properties) ) {
 
-                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive){
-                        if (Cesium.defined(restore)){
-                            restore.primitive.appearance = restore.appearance;
-                        }
+                    if (!Cesium.defined(restore) || pickedObject.primitive != restore.primitive || pickedObject.primitive.id != restore.id){
+                        restoreColor();
                         restore = {
                             primitive:pickedObject.primitive, 
-                            appearance:pickedObject.primitive.appearance
+                            id:pickedObject.id,
+                            attributes:pickedObject.primitive.getGeometryInstanceAttributes(pickedObject.id)
                         };
-
-                        var mat = new Cesium.Material({
-                            fabric : {
-                                type : 'DiffuseMap',
-                                components : {
-                                    diffuse : 'vec3(1.,1.,0)',
-                                    alpha : '1.'
+                        entity.description = {
+                            getValue : function() {
+                                var properties = restore.primitive.properties[restore.id];
+                                var string = "<table>";
+                                for(var p in properties) {
+                                  string += "<tr> <th>" + p + "</th><th>" + properties[p] + "</th></tr>";
                                 }
+                                string += "</table>"
+                                return string;
                             }
-                        });
+                        };
+                        viewer.selectedEntity = entity;
 
-                        pickedObject.primitive.appearance = new Cesium.MaterialAppearance({
-                                    material : mat, 
-                                    faceForward : true
-                                  });
+                        restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(new Cesium.Color(1., 1., 0.));
                     }
 
                 } else {
-                    if (Cesium.defined(restore)){
-                        restore.primitive.appearance = restore.appearance;
-                        restore = undefined;
-                    }
+                    restoreColor();
+                    viewer.selectedEntity = undefined;
                 }
-                pickingInProgress = false;
+                pickingInProgress = undefined;
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         } else {
-            if (Cesium.defined(restore)){
-                restore.primitive.appearance = restore.appearance;
-                restoreApearance = undefined;
-            }
+            restoreColor();
+            viewer.selectedEntity = noEntity;
             handler.destroy();
             handler = undefined;
         }
-        }
+    }
+
+
 
   </script>
 </body>
