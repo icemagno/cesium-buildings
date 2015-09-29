@@ -439,7 +439,7 @@ function geomFromWfs(type, coord, textureCoord){
     if (type != 'MultiPolygon') throw "Unhandled geometry type '"+type+"'";
 
     if (type == 'MultiPolygon'){
-        return geomFromWfsTin(coord, textureCoord);
+        return geomFromWfsPolyhedralSurface(coord, textureCoord); // TODO : check if different process is necessary for multupolygon
     }
     throw "Unhandled geometry type '"+type+"'";
 }
