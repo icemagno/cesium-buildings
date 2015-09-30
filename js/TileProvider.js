@@ -1,12 +1,278 @@
-/* Create a Cesium Geometry from a structure
+/**
+ * Build tiles for a QuatreePrimitive from a wfs source
+ * Create a Cesium Geometry from a structure
  * returned by createWfsGeometry worker
+ *
+ * @param options.url : the wfs source (mandat
+ * @param options.layerName : the name of the layer to build the tiles
+ * @param [options.textureBaseUrl=undefined] : the base url for textures, if any
+ * @param [options.tileSize=500] : the approximate tile size in meters (will be rounded depending on the tliing scheme)
+ * @param [options.loadDistance=3] : @todo explain the units... not realy intuitive
+ * @param [options.zOffset=0] : offset in z direction
  */
+var WfsTileProvider = function(options){
+    
+    if (!Cesium.defined(options.url) || !Cesium.defined(options.layerName)){
+        throw new Cesium.DeveloperError('options.url and options.layer are required.');
+    }
+    this._url = options.url;
+    this._layerName = options.layerName;
+    this._textureBaseUrl = options.textureBaseUrl; // can be undefined
+    this._tileSize = Cesium.defined(options.tileSize) ? options.tileSize : 500;
+    this._loadDistance = Cesium.defined(options.loadDistance) ? options.loadDistance : 3;
+    this._zOffset = Cesium.defined(options.zOffset) ? options.zOffset : 0;
 
-var TRICOUNT = 0;
-var STATS = {};
+    if (Cesium.defined(this._textureBaseUrl) && this._textureBaseUrl.slice(-1) != '/'){
+        this._textureBaseUrl += '/';
+    }
 
-function geometryFromArrays(data){
-    TRICOUNT += data.position.length / 9;
+    this._quadtree = undefined;
+    this._errorEvent = new Cesium.Event();
+    this._ready = false; // until we actually have the response from GetCapabilities
+    this._tilingScheme = new Cesium.GeographicTilingScheme(); // needed for ellispoid
+
+
+    // get capabilities to finish setup and get ready
+    this._getCapapilitesAndGetReady();
+};
+
+var DEGREES_PER_RADIAN = 180.0 / Math.PI;
+var RADIAN_PER_DEGREEE = 1 / DEGREES_PER_RADIAN;
+
+WfsTileProvider.TRICOUNT = 0;
+WfsTileProvider.STATS = {};
+WfsTileProvider._vertexShader = 
+        'attribute vec3 position3DHigh;\n' +
+        'attribute vec3 position3DLow;\n' +
+        'attribute vec3 normal;\n' +
+        'attribute vec2 st;\n' +
+        'attribute vec3 color;\n' +
+        'varying vec3 v_color;\n' +
+        'varying vec3 v_normal;\n' +
+        'varying vec3 v_normalEC;\n' +
+        'varying vec2 v_st;\n' +
+        'void main() \n' +
+        '{\n' +
+            'vec4 p = czm_computePosition();\n' +
+            'v_normal = normal;\n' +
+            'v_normalEC = czm_normal * normal;\n' +
+            'v_st = st;\n' +
+            'v_color = color;\n' +
+            'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
+        '}\n';
+WfsTileProvider._fragmentShader = 
+        'uniform sampler2D u_texture;\n' +
+        'varying vec2 v_st;\n' +
+        'varying vec3 v_normal;\n' +
+        'varying vec3 v_normalEC;\n' +
+        'varying float v_featureIndex;\n' +
+        'varying vec3 v_color;\n' +
+        'void main() \n' +
+        '{\n' +
+            'czm_materialInput materialInput;\n' +
+            'materialInput.s = v_st.s;\n' +
+            'materialInput.st = v_st;\n' +
+            'materialInput.str = vec3(v_st, 0.0);\n' +
+            'materialInput.normalEC = v_normalEC;\n' +
+            'czm_material material = czm_getMaterial(materialInput);\n' +
+            'vec3 diffuse = v_color;\n' +
+            'gl_FragColor = vec4(diffuse*(0.5+czm_getLambertDiffuse(normalize(v_normalEC), czm_sunDirectionEC)) + material.emission, 1.0);\n' +
+        '}\n';
+Object.defineProperties(WfsTileProvider.prototype, {
+    quadtree: {
+        get: function() {
+            return this._quadtree;
+        },
+        set: function(value) {
+            this._quadtree = value;
+        }
+    },
+
+    ready: {
+        get: function() {
+            return this._ready;
+        }
+    },
+
+    tilingScheme: {
+        get: function() {
+            return this._tilingScheme;
+        }
+    },
+
+    errorEvent: {
+        get: function() {
+            return this._errorEvent;
+        }
+    }
+});
+
+
+WfsTileProvider.prototype._getCapapilitesAndGetReady = function(){
+
+    var url = this._url+'?SERVICE=WFS&VERSION=1.0.0&REQUEST=GetCapabilities';
+    var that = this;
+    Cesium.loadXML(url).then(function(xml){
+        
+        try { // for debugging, otherwise error are caught and failure is silent
+
+        // Is this really a GetCapabilities response?
+        if (!xml || !xml.documentElement || (xml.documentElement.localName !== 'WFS_Capabilities')) {
+            throw Cesium.RuntimeError("The response from the WFS server doen't like at GetCapabilities response url:"+url);
+        }
+
+        var featureTypes = xml.getElementsByTagName('FeatureType');
+        var extentWGS84 = undefined;
+        that._srs = undefined;
+        for (var i=0; i<featureTypes.length; i++){
+            if (featureTypes[i].getElementsByTagName('Name')[0].childNodes[0].nodeValue == that._layerName){
+                extent = featureTypes[i].getElementsByTagName('LatLongBoundingBox')[0];
+                that._srs = featureTypes[i].getElementsByTagName('SRS')[0].childNodes[0].nodeValue;
+            }
+        }
+
+        if (!Cesium.defined(extent) || !Cesium.defined(that._srs)){
+            throw Cesium.RuntimeError("No layer "+that._layerName+" in url:"+url);
+        }
+
+
+        extent = new Cesium.Rectangle.fromDegrees(
+                extent.getAttribute('minx'),
+                extent.getAttribute('miny'),
+                extent.getAttribute('maxx'),
+                extent.getAttribute('maxy')
+                );
+
+
+        var minExtent = new Cesium.Cartographic(extent.west, extent.south);
+    //    var maxExtent = new Cesium.Cartographic(extent.east, extent.north);
+        var p1 = new Cesium.Cartographic(extent.east, extent.south);
+        var p2 = new Cesium.Cartographic(extent.west, extent.north);
+        var nx, ny;
+        var geodesic = new Cesium.EllipsoidGeodesic(minExtent, p1);
+        nx = Math.ceil(geodesic.surfaceDistance / that._tileSize / 2);
+        geodesic.setEndPoints(minExtent, p2);
+        ny = Math.ceil(geodesic.surfaceDistance / that._tileSize / 2);
+        // TODO : fix extent
+        that._tilingScheme = new Cesium.GeographicTilingScheme({
+            rectangle : extent, 
+            numberOfLevelZeroTilesX : nx, 
+            numberOfLevelZeroTilesY : ny
+        });
+
+        // defines the distance at which the data appears
+        that._levelZeroMaximumError = geodesic.surfaceDistance * 0.25 / (65 * ny) * that._loadDistance;
+
+        that._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
+        that._loadedBoxes = [];
+        that._cachedPrimitives = {};
+        that._colorFunction = function(properties){
+            return new Cesium.Color(1.0,1.0,1.0,1.0);
+        };
+
+        var ws = [extent.west * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
+        var en = [extent.east * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
+        var wn = [extent.west * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
+        var es = [extent.east * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
+        ws = proj4('EPSG:4326',that._srs).forward(ws);
+        en = proj4('EPSG:4326',that._srs).forward(en);
+        wn = proj4('EPSG:4326',that._srs).forward(wn);
+        es = proj4('EPSG:4326',that._srs).forward(es);
+        that._nativeExtent = [ws[0] < wn[0] ? ws[0] : wn[0],
+                              ws[1] < es[1] ? ws[1] : es[1],
+                              es[0] > en[0] ? es[0] : en[0],
+                              wn[1] > en[1] ? wn[1] : en[1]];
+        that._nx = nx * 2;
+        that._ny = ny * 2;
+
+        that._tileLoaded = 0;
+        that._tilePending = 0;
+        that._ready = true;
+
+        }catch (err){
+            console.error(err);
+        }
+    });
+
+};
+
+WfsTileProvider.prototype.beginUpdate = function(context, frameState, commandList) {};
+
+WfsTileProvider.prototype.endUpdate = function(context, frameState, commandList) {};
+
+WfsTileProvider.prototype.getLevelMaximumGeometricError = function(level) {
+    return this._levelZeroMaximumError / (1 << level);
+};
+
+
+WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
+    var that = this;
+    if (tile.state === Cesium.QuadtreeTileLoadState.START) {
+        tile.data = {
+            primitive: undefined,//new Cesium.PrimitiveCollection(),
+            freeResources: function() {
+                if (Cesium.defined(this.primitive)) {
+                    //this.primitive.destroy();
+                    //this.primitive = undefined;
+                }
+            }
+        };
+
+        tile.data.primitive = new Cesium.PrimitiveCollection();
+        var earthRadius = 6371000;
+        var tileSizeMeters = Math.abs(earthRadius*(tile.rectangle.south - tile.rectangle.north));
+
+        tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
+        tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
+
+        if(tile.level === 1/* && tile.x === 14 && tile.y === 8*/) {
+            this.prepareTile(tile, context, frameState);
+        } else if(tile.level === 0) {
+            tile.state = Cesium.QuadtreeTileLoadState.DONE;
+            tile.renderable = true;
+        } else {
+            tile.state = Cesium.QuadtreeTileLoadState.DONE;
+            tile.renderable = false;
+        }
+    }
+};
+
+WfsTileProvider.prototype.computeTileVisibility = function(tile, frameState, occluders) {
+    var boundingSphere;
+    if (frameState.mode === Cesium.SceneMode.SCENE3D) {
+        boundingSphere = tile.data.boundingSphere3D;
+    } else {
+        boundingSphere = tile.data.boundingSphere2D;
+    }
+    return frameState.cullingVolume.computeVisibility(boundingSphere);
+};
+
+WfsTileProvider.prototype.showTileThisFrame = function(tile, context, frameState, commandList) {
+    tile.data.primitive.update(context, frameState, commandList);
+};
+
+var subtractScratch = new Cesium.Cartesian3();
+
+WfsTileProvider.prototype.computeDistanceToTile = function(tile, frameState) {
+    var boundingSphere;
+    if (frameState.mode === Cesium.SceneMode.SCENE3D) {
+        boundingSphere = tile.data.boundingSphere3D;
+    } else {
+        boundingSphere = tile.data.boundingSphere2D;
+    }
+    return Math.max(0.0, Cesium.Cartesian3.magnitude(Cesium.Cartesian3.subtract(boundingSphere.center, frameState.camera.positionWC, subtractScratch)) - boundingSphere.radius);
+};
+
+WfsTileProvider.prototype.isDestroyed = function() {
+    return false;
+};
+
+WfsTileProvider.prototype.destroy = function() {
+    return Cesium.destroyObject(this);
+};
+
+WfsTileProvider.geometryFromArrays = function(data){
+    WfsTileProvider.TRICOUNT += data.position.length / 9;
     var attributes = new Cesium.GeometryAttributes();
     attributes.position  = new Cesium.GeometryAttribute({
         componentDatatype : Cesium.ComponentDatatype.DOUBLE,
@@ -67,242 +333,10 @@ function geometryFromArrays(data){
     //geom = Cesium.GeometryPipeline.computeBinormalAndTangent( geom );
 
     return geom;
-}
-
-/* The tile will be empty if the tile size (north->south) is below minSize or above maxsize
- */
-function WfsTileProvider(url, layerName, textureBaseUrl, extent, tileSize, loadDistance){
-    this._quadtree = undefined;
-    this._errorEvent = new Cesium.Event();
-
-    this._tileSize = tileSize;
-    var minExtent = new Cesium.Cartographic(extent.west, extent.south);
-//    var maxExtent = new Cesium.Cartographic(extent.east, extent.north);
-    var p1 = new Cesium.Cartographic(extent.east, extent.south);
-    var p2 = new Cesium.Cartographic(extent.west, extent.north);
-    var nx, ny;
-    var geodesic = new Cesium.EllipsoidGeodesic(minExtent, p1);
-    nx = Math.ceil(geodesic.surfaceDistance / tileSize / 2);
-    geodesic.setEndPoints(minExtent, p2);
-    ny = Math.ceil(geodesic.surfaceDistance / tileSize / 2);
-    // TODO : fix extent
-    this._tilingScheme = new Cesium.GeographicTilingScheme({rectangle : extent, numberOfLevelZeroTilesX : nx, numberOfLevelZeroTilesY : ny});
-
-    // defines the distance at which the data appears
-    this._levelZeroMaximumError = geodesic.surfaceDistance * 0.25 / (65 * ny) * loadDistance;
-
-    this._url = url;
-    this._layerName = layerName;
-    //this._textureBaseUrl = textureBaseUrl+'/';
-    this._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
-    this._loadedBoxes = [];
-    this._cachedPrimitives = {};
-    this._colorFunction = function(properties){
-        return new Cesium.Color(1.0,1.0,1.0,1.0);
-    }
-
-    var ws = [extent.west * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
-    var en = [extent.east * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
-    var wn = [extent.west * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
-    var es = [extent.east * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
-    ws = proj4('EPSG:4326','EPSG:3946').forward(ws);
-    en = proj4('EPSG:4326','EPSG:3946').forward(en);
-    wn = proj4('EPSG:4326','EPSG:3946').forward(wn);
-    es = proj4('EPSG:4326','EPSG:3946').forward(es);
-    this._nativeExtent = [ws[0] < wn[0] ? ws[0] : wn[0],
-                          ws[1] < es[1] ? ws[1] : es[1],
-                          es[0] > en[0] ? es[0] : en[0],
-                          wn[1] > en[1] ? wn[1] : en[1]];
-    this._nx = nx * 2;
-    this._ny = ny * 2;
-
-    this._tileLoaded = 0;
-    this._tilePending = 0;
-
-    this._vertexShader = 
-        'attribute vec3 position3DHigh;\n' +
-        'attribute vec3 position3DLow;\n' +
-        'attribute vec3 normal;\n' +
-        'attribute vec2 st;\n' +
-        'attribute vec3 color;\n' +
-        'varying vec3 v_color;\n' +
-        'varying vec3 v_normal;\n' +
-        'varying vec3 v_normalEC;\n' +
-        'varying vec2 v_st;\n' +
-        'void main() \n' +
-        '{\n' +
-            'vec4 p = czm_computePosition();\n' +
-            'v_normal = normal;\n' +
-            'v_normalEC = czm_normal * normal;\n' +
-            'v_st = st;\n' +
-            'v_color = color;\n' +
-            'gl_Position = czm_modelViewProjectionRelativeToEye * p;\n' +
-        '}\n';
-    this._fragmentShader = 
-        'uniform sampler2D u_texture;\n' +
-        'varying vec2 v_st;\n' +
-        'varying vec3 v_normal;\n' +
-        'varying vec3 v_normalEC;\n' +
-        'varying float v_featureIndex;\n' +
-        'varying vec3 v_color;\n' +
-        'void main() \n' +
-        '{\n' +
-            'czm_materialInput materialInput;\n' +
-            'materialInput.s = v_st.s;\n' +
-            'materialInput.st = v_st;\n' +
-            'materialInput.str = vec3(v_st, 0.0);\n' +
-            'materialInput.normalEC = v_normalEC;\n' +
-            'czm_material material = czm_getMaterial(materialInput);\n' +
-            'vec3 diffuse = v_color;\n' +
-            'gl_FragColor = vec4(diffuse*(0.5+czm_getLambertDiffuse(normalize(v_normalEC), czm_sunDirectionEC)) + material.emission, 1.0);\n' +
-        '}\n';
-}
-
-Object.defineProperties(WfsTileProvider.prototype, {
-    quadtree: {
-        get: function() {
-            return this._quadtree;
-        },
-        set: function(value) {
-            this._quadtree = value;
-        }
-    },
-
-    ready: {
-        get: function() {
-            return true;
-        }
-    },
-
-    tilingScheme: {
-        get: function() {
-            return this._tilingScheme;
-        }
-    },
-
-    errorEvent: {
-        get: function() {
-            return this._errorEvent;
-        }
-    }
-});
-
-WfsTileProvider.prototype.beginUpdate = function(context, frameState, commandList) {};
-
-WfsTileProvider.prototype.endUpdate = function(context, frameState, commandList) {};
-
-WfsTileProvider.prototype.getLevelMaximumGeometricError = function(level) {
-    return this._levelZeroMaximumError / (1 << level);
 };
 
-var DEGREES_PER_RADIAN = 180.0 / Math.PI;
-var RADIAN_PER_DEGREEE = 1 / DEGREES_PER_RADIAN;
-
-WfsTileProvider.prototype.placeHolder = function(tile, red) {
-    var color = Cesium.Color.fromBytes(0, 0, 255, 255);
-    if (red){
-        color = Cesium.Color.fromBytes(255, 0, 0, 255);
-    }
-    tile.data.primitive.add( new Cesium.Primitive({
-        geometryInstances: new Cesium.GeometryInstance({
-            geometry: new Cesium.RectangleOutlineGeometry({
-                rectangle: tile.rectangle
-            }),
-            attributes: {
-                color: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
-            }
-        }),
-        appearance: new Cesium.PerInstanceColorAppearance({
-            flat: true
-        })
-    }));
-};
-
-WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
-    var that = this;
-    if (tile.state === Cesium.QuadtreeTileLoadState.START) {
-        tile.data = {
-            primitive: undefined,//new Cesium.PrimitiveCollection(),
-            freeResources: function() {
-                if (Cesium.defined(this.primitive)) {
-                    //this.primitive.destroy();
-                    //this.primitive = undefined;
-                }
-            }
-        };
-
-        tile.data.primitive = new Cesium.PrimitiveCollection();
-        var earthRadius = 6371000;
-        var tileSizeMeters = Math.abs(earthRadius*(tile.rectangle.south - tile.rectangle.north));
-
-        //tile.data.primitive = new Cesium.PrimitiveCollection();
-        tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
-        tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
-
-        //if (this._minSizeMeters < tileSizeMeters && tileSizeMeters < this._maxSizeMeters) {
-        if(tile.level === 1/* && tile.x === 14 && tile.y === 8*/) {
-            //this.placeHolder(tile);
-            this.prepareTile(tile, context, frameState);
-            /*var points = [new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300),
-                          new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.south, 300),
-                          new Cesium.Cartesian3.fromRadians(tile.rectangle.east, tile.rectangle.north, 300),
-                          new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.north, 300),
-                          new Cesium.Cartesian3.fromRadians(tile.rectangle.west, tile.rectangle.south, 300)];
-            viewer.entities.add({
-                polyline : {
-                    positions : points,
-                    width : 3,
-                    material : new Cesium.PolylineGlowMaterialProperty({
-                        glowPower : 0.2,
-                        color : Cesium.Color.BLUE
-                    })
-                }
-            });*/ 
-        } else if(tile.level === 0) {
-            tile.state = Cesium.QuadtreeTileLoadState.DONE;
-            tile.renderable = true;
-        } else {
-            tile.state = Cesium.QuadtreeTileLoadState.DONE;
-            tile.renderable = false;
-        }
-    }
-};
-
-WfsTileProvider.prototype.computeTileVisibility = function(tile, frameState, occluders) {
-    var boundingSphere;
-    if (frameState.mode === Cesium.SceneMode.SCENE3D) {
-        boundingSphere = tile.data.boundingSphere3D;
-    } else {
-        boundingSphere = tile.data.boundingSphere2D;
-    }
-    return frameState.cullingVolume.computeVisibility(boundingSphere);
-};
-
-WfsTileProvider.prototype.showTileThisFrame = function(tile, context, frameState, commandList) {
-    tile.data.primitive.update(context, frameState, commandList);
-};
-
-var subtractScratch = new Cesium.Cartesian3();
-
-WfsTileProvider.prototype.computeDistanceToTile = function(tile, frameState) {
-    var boundingSphere;
-    if (frameState.mode === Cesium.SceneMode.SCENE3D) {
-        boundingSphere = tile.data.boundingSphere3D;
-    } else {
-        boundingSphere = tile.data.boundingSphere2D;
-    }
-    return Math.max(0.0, Cesium.Cartesian3.magnitude(Cesium.Cartesian3.subtract(boundingSphere.center, frameState.camera.positionWC, subtractScratch)) - boundingSphere.radius);
-};
-
-WfsTileProvider.prototype.isDestroyed = function() {
-    return false;
-};
-
-WfsTileProvider.prototype.destroy = function() {
-    return Cesium.destroyObject(this);
-};
-
-WfsTileProvider.prototype.computeMatrix = function(localPtList, cartesianPtList) {
+// static 
+WfsTileProvider.computeMatrix = function(localPtList, cartesianPtList) {
     var pt1local = localPtList[0];
     var pt2local = localPtList[1];
     var pt3local = localPtList[2];
@@ -375,8 +409,8 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
 
     this.addPendingTile();
     this._cachedPrimitives[key] = [];
-    STATS[key] = {};
-    STATS[key]["start"] = (new Date()).getTime();
+    WfsTileProvider.STATS[key] = {};
+    WfsTileProvider.STATS[key].start = (new Date()).getTime();
     tile.state = Cesium.QuadtreeTileLoadState.LOADING;
     var bboxll = [DEGREES_PER_RADIAN * tile.rectangle.west,
                     DEGREES_PER_RADIAN * tile.rectangle.south,
@@ -386,10 +420,10 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     var wn = [bboxll[0], bboxll[3]];
     var en = [bboxll[2], bboxll[3]];
     var es = [bboxll[2], bboxll[1]];
-    ws = proj4('EPSG:4326','EPSG:3946').forward(ws);
-    en = proj4('EPSG:4326','EPSG:3946').forward(en);
-    wn = proj4('EPSG:4326','EPSG:3946').forward(wn);
-    es = proj4('EPSG:4326','EPSG:3946').forward(es);
+    ws = proj4('EPSG:4326',this._srs).forward(ws);
+    en = proj4('EPSG:4326',this._srs).forward(en);
+    wn = proj4('EPSG:4326',this._srs).forward(wn);
+    es = proj4('EPSG:4326',this._srs).forward(es);
 
     // matrix
     // triangle tile
@@ -401,19 +435,16 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     var localArray = [pt1local, pt2local, pt3local];
     var localArray2 = [pt4local, pt2local, pt3local];
 
-    var deltaZ = 55;    // cesium terrain elevation does not match our data elevation
+    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], this._zOffset);
+    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], this._zOffset);
+    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], this._zOffset);
+    var pt4cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[3], this._zOffset);
 
-    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], deltaZ);
-    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], deltaZ);
-    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], deltaZ);
-    var pt4cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[3], deltaZ);
-
-    //console.log(Cesium.Cartesian3.distance(pt1cart, pt3cart));
     var cartesianArray = [pt1cart, pt2cart, pt3cart];
     var cartesianArray2 = [pt4cart, pt2cart, pt3cart];
 
-    var m = this.computeMatrix(localArray, cartesianArray);
-    var m2 = this.computeMatrix(localArray2, cartesianArray2);
+    var m = WfsTileProvider.computeMatrix(localArray, cartesianArray);
+    var m2 = WfsTileProvider.computeMatrix(localArray2, cartesianArray2);
 
     var x0,x1,y0,y1;
     var lx = this._nativeExtent[2] - this._nativeExtent[0];
@@ -423,9 +454,9 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
     y0 = (this._ny - tile.y - 1) * ly / this._ny + this._nativeExtent[1];
     y1 = (this._ny - tile.y) * ly / this._ny + this._nativeExtent[1];
 
-    var bbox = [x0,y0,x1,y1];
+    var bbox = [x0,y0 < y1 ? y0 : y1 ,x1, y0 < y1 ? y1 : y0];
 
-    STATS[key]["matrix"] = (new Date()).getTime();
+    WfsTileProvider.STATS[key].matrix = (new Date()).getTime();
 
     // grid display
     if(DEBUG_GRID) {
@@ -474,7 +505,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
         var nbOfPointsOnOneSide = 5;
 
         // seed points
-        var points_3946 = [];
+        var points_srs = [];
         var points_4326 = [];
         var vectX = new Cesium.Cartesian3();
         var vectY = new Cesium.Cartesian3();
@@ -484,24 +515,24 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
         Cesium.Cartesian3.divideByScalar(vectY, nbOfPointsOnOneSide, vectY);
         for (var j=0; j<=nbOfPointsOnOneSide; j++){
             for (var k=0; k<=nbOfPointsOnOneSide; k++){
-                var pt_3946 = new Cesium.Cartesian3(pt1local.x, pt1local.y, 300);
+                var pt_srs = new Cesium.Cartesian3(pt1local.x, pt1local.y, 300);
                 var vectX2 = new Cesium.Cartesian3();
                 var vectY2 = new Cesium.Cartesian3();
                 Cesium.Cartesian3.multiplyByScalar(vectX, k, vectX2);
                 Cesium.Cartesian3.multiplyByScalar(vectY, j, vectY2);
-                Cesium.Cartesian3.add(pt_3946, vectX2, pt_3946);
-                Cesium.Cartesian3.add(pt_3946, vectY2, pt_3946);
-                var arrayPt = [pt_3946.x, pt_3946.y];
-                var arrayPt4326 = proj4('EPSG:3946','EPSG:4326').forward( arrayPt );
-                var pt_4326 = new Cesium.Cartesian3.fromDegrees(arrayPt4326[0], arrayPt4326[1], 300 + deltaZ);
+                Cesium.Cartesian3.add(pt_srs, vectX2, pt_srs);
+                Cesium.Cartesian3.add(pt_srs, vectY2, pt_srs);
+                var arrayPt = [pt_srs.x, pt_srs.y];
+                var arrayPt4326 = proj4(this._srs,'EPSG:4326').forward( arrayPt );
+                var pt_4326 = new Cesium.Cartesian3.fromDegrees(arrayPt4326[0], arrayPt4326[1], 300 + this._zOffset);
                 points_4326.push(pt_4326);
 
-                Cesium.Matrix4.multiplyByPoint(m, pt_3946, pt_3946);
-                points_3946.push( pt_3946 );
+                Cesium.Matrix4.multiplyByPoint(m, pt_srs, pt_srs);
+                points_srs.push( pt_srs );
             }
         }
 
-        for(var debug_pt = 0; debug_pt < points_3946.length; debug_pt++)
+        for(var debug_pt = 0; debug_pt < points_srs.length; debug_pt++)
         {
             viewer.entities.add({
                 position : points_4326[debug_pt],
@@ -512,7 +543,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                 }
             });
             viewer.entities.add({
-                position : points_3946[debug_pt],
+                position : points_srs[debug_pt],
                 point : {
                     show : true, // default
                     color : Cesium.Color.SKYBLUE, // default: WHITE
@@ -532,8 +563,8 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
             '&REQUEST=GetFeature'+
             '&outputFormat=JSON'+
             '&typeName='+this._layerName+
-            '&srsName=EPSG:3946'+   // en dur pour le test
-            '&BBOX='+/*boxes.needed[b]*/bbox.join(',');
+            '&srsName='+this._srs+
+            '&BBOX='+bbox.join(',');
 
     this._workerPool.enqueueJob({request : request}, function(w){
         if (tile.data.primitive === undefined){
@@ -570,7 +601,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
             var attributes = {color : new Cesium.ColorGeometryInstanceAttribute(geomProperties.color.red, geomProperties.color.green, geomProperties.color.blue)};
             geomArray[idx] = new Cesium.GeometryInstance({
                 modelMatrix : transformationMatrix,
-                geometry : geometryFromArrays(w.data.geom),
+                geometry : WfsTileProvider.geometryFromArrays(w.data.geom),
                 id : geomProperties.gid,
                 attributes : attributes
             });
@@ -592,8 +623,8 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
                         }
                     }
                 }),
-                vertexShaderSource : that._vertexShader,
-                fragmentShaderSource : that._fragmentShader
+                vertexShaderSource : WfsTileProvider._vertexShader,
+                fragmentShaderSource : WfsTileProvider._fragmentShader
             }),
             asynchronous : false
         });
@@ -606,8 +637,8 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
         tile.state = Cesium.QuadtreeTileLoadState.DONE;
         tile.renderable = true;
         that.addLoadedTile();
-        STATS[key]["geom_stats"] = w.data.stats;
-        STATS[key]["end"] = (new Date()).getTime();
+        WfsTileProvider.STATS[key].geom_stats = w.data.stats;
+        WfsTileProvider.STATS[key].end = (new Date()).getTime();
     });
 };
 
@@ -676,26 +707,26 @@ WfsTileProvider.prototype.setColorFunction = function(colorFunction){
             }
         }
     }
-}
+};
 
 WfsTileProvider.prototype.addPendingTile = function () {
     this._tilePending++;
     this.updateProgress();
-}
+};
 
 WfsTileProvider.prototype.addLoadedTile = function () {
     this._tilePending--;
     this._tileLoaded++;
     this.updateProgress();
-}
+};
 
 WfsTileProvider.prototype.removePendingTile = function () {
     this._tilePending--;
     this.updateProgress();
-}
+};
 
 WfsTileProvider.prototype.updateProgress = function () {
     var d = document.getElementById("info");
     var tot = this._tilePending + this._tileLoaded;
     d.innerHTML = "<b>" + this._tileLoaded + "/" + tot + "</b>";
-}
+};

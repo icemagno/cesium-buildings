@@ -7,7 +7,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
   <!-- Make the application on mobile take up the full browser screen and disable user scaling. -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
-  <title>Lyon buildings demo</title>
+  <title>Gold Coast buildings demo</title>
   <script src="thirdparty/earcut.js"></script>
   <script src="thirdparty/cesium-1.11/Cesium.js"></script>
   <script src="js/BboxLib.js"></script>
@@ -56,35 +56,21 @@ var viewer = new Cesium.Viewer('cesiumContainer'/*, {baseLayerPicker : false, sc
 var texture_dir = "../w/textures/"
 
 // terrain
-viewer.scene.globe.depthTestAgainstTerrain = true;
-var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
-    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
-});
-viewer.terrainProvider = cesiumTerrainProviderMeshes;
+//viewer.scene.globe.depthTestAgainstTerrain = true;
+//var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
+//    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
+//});
+//viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
 // Tiler
-var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider({
-                       url: 'http://ns379426.ip-37-187-164.eu/cgi-bin/tinyows',
-                       layerName: 'tows:lyongeom', 
-                       textureBaseUrl: 'http://ns379426.ip-37-187-164.eu/cesium-buildings-data',
-                       tileSize: 500,
-                       loadDistance: 3,
-                       zOffset: 55
+                       url: 'http://37.187.164.233/cgi-bin/tinyows_australia',
+                       layerName: 'tows:goldcoast'
                        });
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 
-var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
+var cameraView = new Cesium.Rectangle.fromDegrees(153.179104, -27.693205, 153.551171, -28.217537);
 viewer.camera.viewRectangle(cameraView);
-viewer.camera.lookUp(0.5);
-
-// Imagery
-var provider = new Cesium.WebMapServiceImageryProvider({
-    enablePickFeatures : false,
-    url: 'https://download.data.grandlyon.com/wms/grandlyon',
-    layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
-});
-viewer.imageryLayers.addImageryProvider(provider);
 
 function saveStats(){
     urlContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(WfsTileProvider.STATS));

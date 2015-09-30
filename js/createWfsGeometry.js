@@ -1,5 +1,4 @@
 /* This worker thread receives messages containing urls of wfs data
- * the returned features coordinates must be in wgs84 (epsg:4326)
  *
  * The worker will send a message for each loaded feature.
  * The properties (attributes) are sent as a json string that can be 
@@ -439,7 +438,7 @@ function geomFromWfs(type, coord, textureCoord){
     if (type != 'MultiPolygon') throw "Unhandled geometry type '"+type+"'";
 
     if (type == 'MultiPolygon'){
-        return geomFromWfsPolyhedralSurface(coord, textureCoord); // TODO : check if different process is necessary for multupolygon
+        return geomFromWfsPolyhedralSurface(coord, textureCoord); // TODO : check if different process is necessary for multipolygon
     }
     throw "Unhandled geometry type '"+type+"'";
 }
