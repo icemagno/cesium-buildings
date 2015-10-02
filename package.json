@@ -1,0 +1,36 @@
+{
+  "name": "cesium-buildings",
+  "version": "0.0.1",
+  "description": "visualize 3D textured geometries of your city from wfs sources",
+  "author": "Oslandia",
+  "license": "GNU Lesser General Public License version 2.1 or any later version",
+  "main": "lib/index.js",
+  "dependencies": {
+    "proj4": "^2.3.6",
+    "earcut": "^2.0.0",
+    "proj4js-defs": "^0.0.1",
+    "cesium": "1.11.1",
+    "browserify": "^11.2.0",
+    "deamdify": "^0.1.1",
+    "jshint": "^2.8"
+  },
+  "scripts": {
+    "make_dirs": "mkdir -p wwwroot/build",
+    "build_goldcoast": "browserify -t deamdify GoldCoast.js > wwwroot/build/GoldCoast.js",
+    "build_lyon": "browserify -t deamdify LyonGeom.js > wwwroot/build/LyonGeom.js",
+    "build_worker": "browserify -t deamdify lib/createWfsGeometry.js > wwwroot/build/createWfsGeometry.js",
+    "cpy_cesium_assets": "cp -r node_modules/cesium/Build/Cesium wwwroot/build/",
+    "build" : "jshint lib/*.js && npm run make_dirs && npm run cpy_cesium_assets && npm run build_worker && npm run build_goldcoast && npm run build_lyon"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Oslandia/cesium-buildings.git"
+  },
+  "keywords": [
+    "cesium",
+    "postgis"
+  ],
+  "bugs": {
+    "url": "https://github.com/Oslandia/cesium-buildings/issues"
+  }
+}

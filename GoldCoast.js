@@ -1,90 +1,39 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <!-- Use correct character set. -->
-  <meta charset="utf-8">
-  <!-- Tell IE to use the latest, best version (or Chrome Frame if pre-IE11). -->
-  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
-  <!-- Make the application on mobile take up the full browser screen and disable user scaling. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
-  <title>Lyon buildings demo</title>
-  <script src="thirdparty/earcut.js"></script>
-  <script src="thirdparty/cesium-1.11/Cesium.js"></script>
-  <script src="js/BboxLib.js"></script>
-  <script src="js/WorkerPool.js"></script>
-  <script src="js/TileProvider.js"></script>
-  <script src="thirdparty/proj4-src.js"></script>
-  <script src="js/proj4-srs.js"></script>
-  <style>
-      @import url(thirdparty/cesium-1.11/Widgets/widgets.css);
-      html, body, #cesiumContainer {
-          top: 0px;
-          left: 0px;
-          position: absolute;
-          width: 100%; 
-          height: 100%; 
-          margin: 0; 
-          padding: 0; 
-          overflow: hidden;
-          z-index: -1;
-      }
-      #uiMenu {
-          border-radius:5px;
-          padding: 10px;
-          position:absolute;
-          left: 20px;
-          font-family: "Arial";
-          z-index: 99999;
-      }
-  </style>
-</head>
-<body>
-  <div id="cesiumContainer"></div>
-  <div id="uiMenu">
-    <button type="button" onclick="toggleThematic()">toggle thematic coloring</button> 
-    <button type="button" onclick="toggleHighlight()">toggle highlight on mouseover</button> 
-    <button type="button" onclick="toggleOsm()">toggle OSM background</button>
-    <button type="button" onclick="saveStats()">save stats</button>
-  </div>
-  <br/><br/>
-  <div id="info"></div>
-  <script>
+global.CESIUM_BASE_URL = 'build/Cesium/';
+
+var Cesium = {};
+Cesium.CesiumTerrainProvider = require('cesium/Source/Core/CesiumTerrainProvider');
+Cesium.ColorGeometryInstanceAttribute = require('cesium/Source/Core/ColorGeometryInstanceAttribute');
+Cesium.Color = require('cesium/Source/Core/Color');
+Cesium.defined = require('cesium/Source/Core/defined');
+Cesium.Entity = require('cesium/Source/DataSources/Entity');
+Cesium.OpenStreetMapImageryProvider = require('cesium/Source/Scene/OpenStreetMapImageryProvider');
+Cesium.QuadtreePrimitive = require('cesium/Source/Scene/QuadtreePrimitive');
+Cesium.Rectangle = require('cesium/Source/Core/Rectangle');
+Cesium.ScreenSpaceEventHandler = require('cesium/Source/Core/ScreenSpaceEventHandler');
+Cesium.ScreenSpaceEventType = require('cesium/Source/Core/ScreenSpaceEventType');
+Cesium.Viewer = require('cesium/Source/Widgets/Viewer/Viewer');
+
+var WfsTileProvider = require('./lib/WfsTileProvider');
 
 var viewer = new Cesium.Viewer('cesiumContainer'/*, {baseLayerPicker : false, scene3DOnly : true}*/);
 
 
-var texture_dir = "../w/textures/"
-
 // terrain
-viewer.scene.globe.depthTestAgainstTerrain = true;
-var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
-    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
-});
-viewer.terrainProvider = cesiumTerrainProviderMeshes;
+//viewer.scene.globe.depthTestAgainstTerrain = true;
+//var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
+//    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
+//});
+//viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
 // Tiler
-var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider({
-                       url: 'http://ns379426.ip-37-187-164.eu/cgi-bin/tinyows',
-                       layerName: 'tows:lyongeom', 
-                       textureBaseUrl: 'http://ns379426.ip-37-187-164.eu/cesium-buildings-data',
-                       tileSize: 500,
-                       loadDistance: 3,
-                       zOffset: 55
+                       url: 'http://37.187.164.233/cgi-bin/tinyows_australia',
+                       layerName: 'tows:goldcoast'
                        });
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
 
-var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
+var cameraView = new Cesium.Rectangle.fromDegrees(153.179104, -27.693205, 153.551171, -28.217537);
 viewer.camera.viewRectangle(cameraView);
-viewer.camera.lookUp(0.5);
-
-// Imagery
-var provider = new Cesium.WebMapServiceImageryProvider({
-    enablePickFeatures : false,
-    url: 'https://download.data.grandlyon.com/wms/grandlyon',
-    layers : 'PlanGuide_VueEnsemble_625cm_CC46'//'Ortho2009_vue_ensemble_16cm_CC46'
-});
-viewer.imageryLayers.addImageryProvider(provider);
 
 function saveStats(){
     urlContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(WfsTileProvider.STATS));
@@ -177,9 +126,7 @@ var thematicOn = false;
             handler = undefined;
         }
     }
-
-
-
-  </script>
-</body>
-</html>
+global.toggleThematic = toggleThematic;
+global.toggleHighlight = toggleHighlight;
+global.toggleOsm = toggleOsm;
+global.saveStats = saveStats;
