@@ -1,0 +1,26 @@
+{
+  "name": "cesium-buildings",
+  "version": "0.0.1",
+  "description": "visualize 3D textured geometries of your city from wfs sources",
+  "author": "Oslandia",
+  "license": "GNU Lesser General Public License version 2.1 or any later version",
+  "main": "lib/index.js",
+  "dependencies": {
+    "proj4": "^2.3.6",
+    "earcut": "^2.0.0"
+  },
+  "scripts": {
+    "test": "echo test script placeholder"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Oslandia/cesium-buildings.git"
+  },
+  "keywords": [
+    "cesium",
+    "postgis"
+  ],
+  "bugs": {
+    "url": "https://github.com/Oslandia/cesium-buildings/issues"
+  }
+}
