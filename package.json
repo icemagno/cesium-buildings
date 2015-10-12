@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "name": "terriajs-cesium-buildings",
+=======
+  "name": "cesium-buildings",
+>>>>>>> bf3e82e4e8407bd15a6f35edf01a0e7ef7e6c481
   "version": "0.0.1",
   "description": "visualize 3D textured geometries of your city from wfs sources",
   "author": "Oslandia",
@@ -7,6 +11,7 @@
   "main": "lib/index.js",
   "dependencies": {
     "proj4": "^2.3.6",
+<<<<<<< HEAD
     "earcut": "^2.0.0",
     "proj4js-defs": "^0.0.1",
     "terriajs-cesium": "1.11.1",
@@ -44,6 +49,12 @@
     "transform": [
       "deamdify"
     ]
+=======
+    "earcut": "^2.0.0"
+  },
+  "scripts": {
+    "test": "echo test script placeholder"
+>>>>>>> bf3e82e4e8407bd15a6f35edf01a0e7ef7e6c481
   },
   "repository": {
     "type": "git",
