@@ -1,17 +1,17 @@
 global.CESIUM_BASE_URL = 'build/Cesium/';
 
 var Cesium = {};
-Cesium.CesiumTerrainProvider = require('cesium/Source/Core/CesiumTerrainProvider');
-Cesium.ColorGeometryInstanceAttribute = require('cesium/Source/Core/ColorGeometryInstanceAttribute');
-Cesium.Color = require('cesium/Source/Core/Color');
-Cesium.defined = require('cesium/Source/Core/defined');
-Cesium.Entity = require('cesium/Source/DataSources/Entity');
-Cesium.OpenStreetMapImageryProvider = require('cesium/Source/Scene/OpenStreetMapImageryProvider');
-Cesium.QuadtreePrimitive = require('cesium/Source/Scene/QuadtreePrimitive');
-Cesium.Rectangle = require('cesium/Source/Core/Rectangle');
-Cesium.ScreenSpaceEventHandler = require('cesium/Source/Core/ScreenSpaceEventHandler');
-Cesium.ScreenSpaceEventType = require('cesium/Source/Core/ScreenSpaceEventType');
-Cesium.Viewer = require('cesium/Source/Widgets/Viewer/Viewer');
+Cesium.CesiumTerrainProvider = require('terriajs-cesium/Source/Core/CesiumTerrainProvider');
+Cesium.ColorGeometryInstanceAttribute = require('terriajs-cesium/Source/Core/ColorGeometryInstanceAttribute');
+Cesium.Color = require('terriajs-cesium/Source/Core/Color');
+Cesium.defined = require('terriajs-cesium/Source/Core/defined');
+Cesium.Entity = require('terriajs-cesium/Source/DataSources/Entity');
+Cesium.OpenStreetMapImageryProvider = require('terriajs-cesium/Source/Scene/OpenStreetMapImageryProvider');
+Cesium.QuadtreePrimitive = require('terriajs-cesium/Source/Scene/QuadtreePrimitive');
+Cesium.Rectangle = require('terriajs-cesium/Source/Core/Rectangle');
+Cesium.ScreenSpaceEventHandler = require('terriajs-cesium/Source/Core/ScreenSpaceEventHandler');
+Cesium.ScreenSpaceEventType = require('terriajs-cesium/Source/Core/ScreenSpaceEventType');
+Cesium.Viewer = require('terriajs-cesium/Source/Widgets/Viewer/Viewer');
 
 var WfsTileProvider = require('./lib/WfsTileProvider');
 
@@ -19,11 +19,11 @@ var viewer = new Cesium.Viewer('cesiumContainer'/*, {baseLayerPicker : false, sc
 
 
 // terrain
-//viewer.scene.globe.depthTestAgainstTerrain = true;
-//var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
-//    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
-//});
-//viewer.terrainProvider = cesiumTerrainProviderMeshes;
+viewer.scene.globe.depthTestAgainstTerrain = true;
+var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
+    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
+});
+viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
 // Tiler
 var tileProvider = new WfsTileProvider({

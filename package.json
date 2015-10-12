@@ -1,5 +1,5 @@
 {
-  "name": "cesium-buildings",
+  "name": "terriajs-cesium-buildings",
   "version": "0.0.1",
   "description": "visualize 3D textured geometries of your city from wfs sources",
   "author": "Oslandia",
@@ -9,9 +9,23 @@
     "proj4": "^2.3.6",
     "earcut": "^2.0.0",
     "proj4js-defs": "^0.0.1",
-    "cesium": "1.11.1",
+    "terriajs-cesium": "1.11.1",
     "browserify": "^11.2.0",
-    "deamdify": "^0.1.1",
+    "resolve": "^1.1.6",
+    "deamdify": "^0.1.1"
+  },
+  "devDependencies": {
+    "browserify": "^9.0.8",
+    "compression": "1.4.3",
+    "exorcist": "^0.3.0",
+    "glob-all": "^3.0.1",
+    "gulp": "^3.8.11",
+    "gulp-sourcemaps": "^1.5.2",
+    "gulp-uglify": "^1.2.0",
+    "request": "2.55.0",
+    "vinyl-buffer": "^1.0.0",
+    "vinyl-source-stream": "^1.1.0",
+    "vinyl-transform": "^1.0.0",
     "jshint": "^2.8"
   },
   "scripts": {
@@ -21,7 +35,15 @@
     "build_worker": "browserify -t deamdify lib/createWfsGeometry.js > wwwroot/build/createWfsGeometry.js",
     "cpy_cesium_assets": "cp -r node_modules/cesium/Build/Cesium wwwroot/build/",
     "build" : "jshint lib/*.js && npm run make_dirs && npm run cpy_cesium_assets && npm run build_worker && npm run build_goldcoast && npm run build_lyon",
+    "prepublish": "bash -c \"if [ ! -d \"./wwwroot/build\" ]; then gulp prepare-cesium-buildings; fi\"",
+    "postpublish": "bash -c \"git tag -a terriajs-${npm_package_version} -m \"terriajs-${npm_package_version}\" && git push origin terriajs-${npm_package_version}\"",
+    "postinstall": "bash -c \"if [ ! -d \"./wwwroot/build\" ]; then gulp prepare-cesium-buildings; fi\"",
     "clean" : "rm -rf wwwroot/build"
+  },
+  "browserify": {
+    "transform": [
+      "deamdify"
+    ]
   },
   "repository": {
     "type": "git",
