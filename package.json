@@ -20,7 +20,8 @@
     "build_lyon": "browserify -t deamdify LyonGeom.js > wwwroot/build/LyonGeom.js",
     "build_worker": "browserify -t deamdify lib/createWfsGeometry.js > wwwroot/build/createWfsGeometry.js",
     "cpy_cesium_assets": "cp -r node_modules/cesium/Build/Cesium wwwroot/build/",
-    "build" : "jshint lib/*.js && npm run make_dirs && npm run cpy_cesium_assets && npm run build_worker && npm run build_goldcoast && npm run build_lyon"
+    "build" : "jshint lib/*.js && npm run make_dirs && npm run cpy_cesium_assets && npm run build_worker && npm run build_goldcoast && npm run build_lyon",
+    "clean" : "rm -rf wwwroot/build"
   },
   "repository": {
     "type": "git",

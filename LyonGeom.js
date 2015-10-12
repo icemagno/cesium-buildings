@@ -32,7 +32,7 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new WfsTileProvider({
-                       url: 'http://ns379426.ip-37-187-164.eu/cgi-bin/tinyows',
+                       url: 'http://91.121.102.10/cgi-bin/tinyows',
                        layerName: 'tows:lyongeom', 
                        textureBaseUrl: 'http://ns379426.ip-37-187-164.eu/cesium-buildings-data',
                        tileSize: 500,
