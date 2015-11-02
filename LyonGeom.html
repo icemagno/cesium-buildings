@@ -9,14 +9,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
   <title>Lyon buildings demo</title>
   <script src="thirdparty/earcut.js"></script>
-  <script src="thirdparty/cesium-1.11/Cesium.js"></script>
+  <script src="thirdparty/cesium-1.15/Cesium.js"></script>
   <script src="js/BboxLib.js"></script>
   <script src="js/WorkerPool.js"></script>
   <script src="js/TileProvider.js"></script>
   <script src="thirdparty/proj4-src.js"></script>
   <script src="js/proj4-srs.js"></script>
   <style>
-      @import url(thirdparty/cesium-1.11/Widgets/widgets.css);
+      @import url(thirdparty/cesium-1.15/Widgets/widgets.css);
       html, body, #cesiumContainer {
           top: 0px;
           left: 0px;
@@ -58,7 +58,7 @@ var texture_dir = "../w/textures/"
 // terrain
 viewer.scene.globe.depthTestAgainstTerrain = true;
 var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
-    url : '//cesiumjs.org/stk-terrain/tilesets/world/tiles'
+    url : '//assets.agi.com/stk-terrain/world'
 });
 viewer.terrainProvider = cesiumTerrainProviderMeshes;
 

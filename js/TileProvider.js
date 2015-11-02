@@ -196,17 +196,20 @@ WfsTileProvider.prototype._getCapapilitesAndGetReady = function(){
 
 };
 
-WfsTileProvider.prototype.beginUpdate = function(context, frameState, commandList) {};
+WfsTileProvider.prototype.beginUpdate = function(frameState) {};
 
-WfsTileProvider.prototype.endUpdate = function(context, frameState, commandList) {};
+WfsTileProvider.prototype.endUpdate = function(frameState) {};
 
 WfsTileProvider.prototype.getLevelMaximumGeometricError = function(level) {
     return this._levelZeroMaximumError / (1 << level);
 };
 
 
-WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
+WfsTileProvider.prototype.loadTile = function(frameState, tile) {
     var that = this;
+    if(tile === undefined) {
+        return;
+    }
     if (tile.state === Cesium.QuadtreeTileLoadState.START) {
         tile.data = {
             primitive: undefined,//new Cesium.PrimitiveCollection(),
@@ -226,7 +229,7 @@ WfsTileProvider.prototype.loadTile = function(context, frameState, tile) {
         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
 
         if(tile.level === 1/* && tile.x === 14 && tile.y === 8*/) {
-            this.prepareTile(tile, context, frameState);
+            this.prepareTile(tile, frameState);
         } else if(tile.level === 0) {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
@@ -247,8 +250,8 @@ WfsTileProvider.prototype.computeTileVisibility = function(tile, frameState, occ
     return frameState.cullingVolume.computeVisibility(boundingSphere);
 };
 
-WfsTileProvider.prototype.showTileThisFrame = function(tile, context, frameState, commandList) {
-    tile.data.primitive.update(context, frameState, commandList);
+WfsTileProvider.prototype.showTileThisFrame = function(tile, frameState) {
+    tile.data.primitive.update(frameState);
 };
 
 var subtractScratch = new Cesium.Cartesian3();
@@ -394,14 +397,14 @@ WfsTileProvider.computeMatrix = function(localPtList, cartesianPtList) {
 var DEBUG_POINTS = false;
 var DEBUG_GRID = false;
 
-WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
+WfsTileProvider.prototype.prepareTile = function(tile, frameState) {
     var key = tile.x + ";" +  tile.y;
     if(key in this._cachedPrimitives) {
         var cached = this._cachedPrimitives[key];
         for(var p = 0; p < cached.length; p++) {
             tile.data.primitive.add(cached[p].primitive);
         }
-        tile.data.primitive.update(context, frameState, []);
+        tile.data.primitive.update(frameState);
         tile.state = Cesium.QuadtreeTileLoadState.DONE;
         tile.renderable = true;
         return;
@@ -633,7 +636,7 @@ WfsTileProvider.prototype.prepareTile = function(tile, context, frameState) {
         tile.data.primitive.add(prim);
 
         that._workerPool.releaseWorker(w.data.workerId);
-        tile.data.primitive.update(context, frameState, []);
+        tile.data.primitive.update(frameState);
         tile.state = Cesium.QuadtreeTileLoadState.DONE;
         tile.renderable = true;
         that.addLoadedTile();
