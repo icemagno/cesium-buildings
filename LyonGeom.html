@@ -12,7 +12,7 @@
   <script src="thirdparty/cesium-1.15/Cesium.js"></script>
   <script src="js/BboxLib.js"></script>
   <script src="js/WorkerPool.js"></script>
-  <script src="js/TileProvider.js"></script>
+  <script src="js/glTFTileProvider.js"></script>
   <script src="thirdparty/proj4-src.js"></script>
   <script src="js/proj4-srs.js"></script>
   <style>
@@ -64,15 +64,15 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
-var tileProvider = new WfsTileProvider({
+var tileProvider = new glTFTileProvider({
                        url: 'http://ns379426.ip-37-187-164.eu/cgi-bin/tinyows',
                        layerName: 'tows:lyongeom', 
                        textureBaseUrl: 'http://ns379426.ip-37-187-164.eu/cesium-buildings-data',
-                       tileSize: 500,
+                       tileSize: 2000,
                        loadDistance: 3,
                        zOffset: 55
                        });
-viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider}));
+viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider, refine : true}));
 
 var cameraView = new Cesium.Rectangle.fromDegrees(4.848, 45.755, 4.852, 45.76);
 viewer.camera.viewRectangle(cameraView);
@@ -95,8 +95,9 @@ var thematicOn = false;
     function toggleThematic(){
         if (!thematicOn){
             tileProvider.setColorFunction(function(properties){
-                return (properties.tileX + properties.tileY) % 2 ? new Cesium.Color(0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,0,1.0) :
-                                                                   new Cesium.Color(0,0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,1.0);
+              return new Cesium.Color(0,0.25 * properties.tileZ, 0.0, 1.0);
+                //return (properties.tileX + properties.tileY) % 2 ? new Cesium.Color(0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,0,1.0) :
+                //                                                   new Cesium.Color(0,0.5 + 0.25 * (properties.gid % 10) / 10.0,0.5 - 0.25 * (properties.gid % 10) / 10.0,1.0);
             });
             thematicOn = true;
         } else {
@@ -172,7 +173,7 @@ var thematicOn = false;
             }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
         } else {
             restoreColor();
-            viewer.selectedEntity = noEntity;
+            viewer.selectedEntity = undefined;
             handler.destroy();
             handler = undefined;
         }
