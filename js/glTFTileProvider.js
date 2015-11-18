@@ -220,7 +220,6 @@ glTFTileProvider
     return this._levelZeroMaximumError / (1 << level);
 };
 
-
 glTFTileProvider
 .prototype.loadTile = function(frameState, tile) {
     var that = this;
@@ -254,6 +253,9 @@ glTFTileProvider
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = false;
         }
+    }
+    else if(tile.state === Cesium.QuadtreeTileLoadState.LOADING) {
+        tile.data.primitive.update(frameState);   // waiting for primitive readiness
     }
 };
 
@@ -610,7 +612,7 @@ glTFTileProvider
     var geomArray = [];
     var properties = {};
 
-    var request = "http://localhost/server?city=lyon&format=bglTF&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x + '&BBOX='+/*boxes.needed[b]*/bbox.join(',');
+    var request = "http://localhost/server?city=lyon&format=bglTF&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
     /*var request = this._url+
             '?SERVICE=WFS'+
             '&VERSION=1.0.0'+
@@ -630,8 +632,12 @@ glTFTileProvider
     });
     tile.data.primitive.add(prim);
     this._cachedPrimitives[key].push({primitive:prim});
-    tile.state = Cesium.QuadtreeTileLoadState.DONE;
-    tile.renderable = true;
+
+    Cesium.when(prim.readyPromise).then(function(model) {
+        that.addLoadedTile();
+        tile.state = Cesium.QuadtreeTileLoadState.DONE;
+        tile.renderable = true;
+    });
 
     return;
 
