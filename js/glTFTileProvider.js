@@ -30,6 +30,7 @@ var glTFTileProvider = function(options){
     this._errorEvent = new Cesium.Event();
     this._ready = false; // until we actually have the response from GetCapabilities
     this._tilingScheme = new Cesium.GeographicTilingScheme(); // needed for ellispoid
+    this._loadingPrimitives = {};
 
 
     // get capabilities to finish setup and get ready
@@ -176,7 +177,7 @@ glTFTileProvider
         // defines the distance at which the data appears
         that._levelZeroMaximumError = geodesic.surfaceDistance * 0.25 / (65 * ny) * that._loadDistance;
 
-        that._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
+        that._workerPool = new WorkerPool(4, 'js/createglTFGeometry.js');
         that._loadedBoxes = [];
         that._cachedPrimitives = {};
         that._colorFunction = function(properties){
@@ -210,7 +211,11 @@ glTFTileProvider
 };
 
 glTFTileProvider
-.prototype.beginUpdate = function(frameState) {};
+.prototype.beginUpdate = function(frameState) {
+    for(var p in this._loadingPrimitives) {
+        this._loadingPrimitives[p].update(frameState);  // the primitives need to be updated to continue loading
+    }
+};
 
 glTFTileProvider
 .prototype.endUpdate = function(frameState) {};
@@ -253,9 +258,6 @@ glTFTileProvider
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = false;
         }
-    }
-    else if(tile.state === Cesium.QuadtreeTileLoadState.LOADING) {
-        tile.data.primitive.update(frameState);   // waiting for primitive readiness
     }
 };
 
@@ -553,8 +555,7 @@ glTFTileProvider
                 });
     }
 
-    if(DEBUG_POINTS)
-    {
+    if(DEBUG_POINTS) {
         var width = Cesium.Cartesian3.distance(pt1local, pt2local);
         var height = Cesium.Cartesian3.distance(pt1local, pt3local);
         var nbOfPointsOnOneSide = 5;
@@ -612,7 +613,7 @@ glTFTileProvider
     var geomArray = [];
     var properties = {};
 
-    var request = "http://localhost/server?city=lyon&format=bglTF&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
+    var request = "http://localhost/server?city=lyon&format=bglTF&query=getGeometry&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
     /*var request = this._url+
             '?SERVICE=WFS'+
             '&VERSION=1.0.0'+
@@ -625,24 +626,25 @@ glTFTileProvider
     Cesium.Matrix3.fromRotationZ(3.14/2.0, rot);
     Cesium.Matrix4.multiplyByMatrix3(m, rot, m);
 
-    var prim = Cesium.Model.fromGltf({
+    /*var prim = Cesium.Model.fromGltf({
         url:request,
         show:true,
         modelMatrix:m
-    });
-    tile.data.primitive.add(prim);
+    });*/
+
+    /*tile.data.primitive.add(prim);
     this._cachedPrimitives[key].push({primitive:prim});
 
     Cesium.when(prim.readyPromise).then(function(model) {
         that.addLoadedTile();
         tile.state = Cesium.QuadtreeTileLoadState.DONE;
         tile.renderable = true;
-    });
+    });*/
 
-    return;
+    /*return;*/
 
     this._workerPool.enqueueJob({request : request}, function(w){
-        if (tile.data.primitive === undefined){
+        /*if (tile.data.primitive === undefined){
             if(w.data.geom !== undefined) return;   // TODO : cancel request in stead of waiting for its completion
             // tile suppressed while we waited for reply
             // receive messages from worker until done
@@ -652,8 +654,36 @@ glTFTileProvider
             delete that._cachedPrimitives[key];
             that.removePendingTile();
             return;
-        }
-        if (w.data.geom !== undefined){
+        }*/
+        if (w.data.geom !== undefined) {
+            var ab = w.data.geom;
+
+            var bglTFHeader = new Uint32Array(ab, 0, 5);
+            if(bglTFHeader[3] === 0) {  // scene length = 0 -> no glTF to read
+                that.addLoadedTile();
+                tile.renderable = true;
+                tile.state = Cesium.QuadtreeTileLoadState.DONE;
+                that._workerPool.releaseWorker(w.data.workerId);
+                return;
+            } 
+            var bglTFlength = bglTFHeader[2];
+            var bglTF = new Uint8Array(ab, 0, bglTFlength);
+            var jsonTiles = new Uint8Array(ab, bglTFlength);
+            var jsonTilesStr = String.fromCharCode.apply(null, jsonTiles);
+
+            var prim = new Cesium.Model({gltf : bglTF, modelMatrix : m});
+            tile.data.primitive.add(prim);
+            that._cachedPrimitives[key].push({primitive:prim});
+            that._loadingPrimitives[w.data.workerId] = prim;
+
+            Cesium.when(prim.readyPromise).then(function(model) {
+                that.addLoadedTile();
+                tile.renderable = true;
+                tile.state = Cesium.QuadtreeTileLoadState.DONE;
+                that._workerPool.releaseWorker(w.data.workerId);
+            });
+
+/*
             var transformationMatrix;
             var diag = [es[0] - wn[0], es[1] - wn[1]];
             var posCenter = new Cesium.Cartesian3(w.data.geom.bbox[0], w.data.geom.bbox[1], 300);
@@ -680,45 +710,12 @@ glTFTileProvider
                 geometry : glTFTileProvider.geometryFromArrays(w.data.geom),
                 id : geomProperties.gid,
                 attributes : attributes
-            });
+            });*/
             /*properties[idx] = JSON.parse(w.data.geom.properties);
             properties[idx].tileX = tile.x;
             properties[idx].tileY = tile.y;*/
             return;
         }
-        var prim = new Cesium.Primitive({
-            geometryInstances: geomArray,
-            //releaseGeometryInstances: false,
-            appearance : new Cesium.MaterialAppearance({
-                material : new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        components : {
-                            diffuse :  'vec3(0.5,0.,1.)',
-                            specular : '0.1'
-                        }
-                    }
-                }),
-                vertexShaderSource : glTFTileProvider
-._vertexShader,
-                fragmentShaderSource : glTFTileProvider
-._fragmentShader
-            }),
-            asynchronous : false
-        });
-        prim.properties = properties;
-        that._cachedPrimitives[key].push({/*bbox:w.data.geom.bbox,*/ primitive:prim});
-        tile.data.primitive.add(prim);
-
-        that._workerPool.releaseWorker(w.data.workerId);
-        tile.data.primitive.update(frameState);
-        tile.state = Cesium.QuadtreeTileLoadState.DONE;
-        tile.renderable = true;
-        that.addLoadedTile();
-        glTFTileProvider
-.STATS[key].geom_stats = w.data.stats;
-        glTFTileProvider
-.STATS[key].end = (new Date()).getTime();
     });
 };
 

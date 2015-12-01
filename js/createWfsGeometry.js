@@ -482,39 +482,38 @@ onmessage = function(o) {
                 bbox[2] = geoJson.features[f].geometry.bbox[2];
                 bbox[3] = geoJson.features[f].geometry.bbox[3];
             }
-            var center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
-            if (pointInTile(tileBBox, center)){
-                // temporarily removed textures
-                //var texP = texRe.exec(geoJson.features[f].properties.tex);
-                // remove the texture uv from properties
-                // because we put it in the geometry
-                //geoJson.features[f].properties.tex = {url:texP[1]};
-                //var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
-                //var st = JSON.parse(arrJson);
-                var coord = geoJson.features[f].geometry.coordinates;
-                var type = geoJson.features[f].geometry.type;
 
-                var geom = geomFromWfs(type, coord, coord/*st*/);
+            // temporarily removed textures
+            //var texP = texRe.exec(geoJson.features[f].properties.tex);
+            // remove the texture uv from properties
+            // because we put it in the geometry
+            //geoJson.features[f].properties.tex = {url:texP[1]};
+            //var arrJson = texP[2].replace(/{/g, "[").replace(/}/g, "]");
+            //var st = JSON.parse(arrJson);
+            var coord = geoJson.features[f].geometry.coordinates;
+            var type = geoJson.features[f].geometry.type;
+
+            var geom = geomFromWfs(type, coord, coord/*st*/);
+            
+            // add attributes
+            geom.properties = JSON.stringify(geoJson.features[f].properties);
+            geom.bbox = bbox;
+            positionLength += geom.position.length;
+
+            postMessage({geom: geom, workerId : o.data.workerId},
+                //geom, 
+                [
+                    geom.indices.buffer,
+                    geom.position.buffer, 
+                    geom.normal.buffer, 
+                    geom.tangent.buffer, 
+                    geom.binormal.buffer, 
+                    geom.st.buffer, 
+                    geom.bsphere_center.buffer,
+                    geom.bbox.buffer
+                ]
+            );
                 
-                // add attributes
-                geom.properties = JSON.stringify(geoJson.features[f].properties);
-                geom.bbox = bbox;
-                positionLength += geom.position.length;
-
-                postMessage({geom: geom, workerId : o.data.workerId},
-                    //geom, 
-                    [
-                        geom.indices.buffer,
-                        geom.position.buffer, 
-                        geom.normal.buffer, 
-                        geom.tangent.buffer, 
-                        geom.binormal.buffer, 
-                        geom.st.buffer, 
-                        geom.bsphere_center.buffer,
-                        geom.bbox.buffer
-                    ]
-                );
-            }
         }
         GEOMETRY_STATS["geom_end"] = (new Date()).getTime();
         postMessage({workerId : o.data.workerId, stats : GEOMETRY_STATS});
