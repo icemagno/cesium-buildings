@@ -18,7 +18,6 @@ var glTFTileProvider = function(options){
     this._url = options.url;
     this._layerName = options.layerName;
     this._textureBaseUrl = options.textureBaseUrl; // can be undefined
-    this._tileSize = Cesium.defined(options.tileSize) ? options.tileSize : 500;
     this._loadDistance = Cesium.defined(options.loadDistance) ? options.loadDistance : 3;
     this._zOffset = Cesium.defined(options.zOffset) ? options.zOffset : 0;
 
@@ -31,6 +30,7 @@ var glTFTileProvider = function(options){
     this._ready = false; // until we actually have the response from GetCapabilities
     this._tilingScheme = new Cesium.GeographicTilingScheme(); // needed for ellispoid
     this._loadingPrimitives = {};
+    this._availableTiles = {};
 
 
     // get capabilities to finish setup and get ready
@@ -117,56 +117,47 @@ Object.defineProperties(glTFTileProvider
 glTFTileProvider
 .prototype._getCapapilitesAndGetReady = function(){
 
-    var url = this._url+'?SERVICE=WFS&VERSION=1.0.0&REQUEST=GetCapabilities';
+    var url = this._url+'?query=getCity&city=' + this._layerName;
     var that = this;
-    Cesium.loadXML(url).then(function(xml){
+    var urlToLoad = 2;
+    Cesium.loadJson(url).then(function(json){
         
         try { // for debugging, otherwise error are caught and failure is silent
 
-        // Is this really a GetCapabilities response?
-        if (!xml || !xml.documentElement || (xml.documentElement.localName !== 'WFS_Capabilities')) {
-            throw Cesium.RuntimeError("The response from the WFS server doen't like at GetCapabilities response url:"+url);
+        // TODO
+
+        urlToLoad--;
+        if(urlToLoad === 0) {
+            that._ready = true;            
         }
+        
 
-        var featureTypes = xml.getElementsByTagName('FeatureType');
-        var extentWGS84 = undefined;
-        that._srs = undefined;
-        for (var i=0; i<featureTypes.length; i++){
-            if (featureTypes[i].getElementsByTagName('Name')[0].childNodes[0].nodeValue == that._layerName){
-                extent = featureTypes[i].getElementsByTagName('LatLongBoundingBox')[0];
-                that._srs = featureTypes[i].getElementsByTagName('SRS')[0].childNodes[0].nodeValue;
-            }
+        } catch (err){
+            console.error(err);
         }
-
-        if (!Cesium.defined(extent) || !Cesium.defined(that._srs)){
-            throw Cesium.RuntimeError("No layer "+that._layerName+" in url:"+url);
-        }
+    });
 
 
-        extent = new Cesium.Rectangle.fromDegrees(
-                extent.getAttribute('minx'),
-                extent.getAttribute('miny'),
-                extent.getAttribute('maxx'),
-                extent.getAttribute('maxy')
-                );
 
+    url = this._url+'?query=getCities';
+    Cesium.loadJson(url).then(function(json){
+        try { // for debugging, otherwise error are caught and failure is silent
 
-        var minExtent = new Cesium.Cartographic(extent.west, extent.south);
-    //    var maxExtent = new Cesium.Cartographic(extent.east, extent.north);
-        var p1 = new Cesium.Cartographic(extent.east, extent.south);
-        var p2 = new Cesium.Cartographic(extent.west, extent.north);
+        json = json[that._layerName];
+        var nativeExtent = json.extent;
+        that._nativeExtent = [nativeExtent[0][0], nativeExtent[0][1], nativeExtent[1][0], nativeExtent[1][1]]; 
+        that._srs = json.srs;
+        that._tileSize = json.maxtilesize;
+
+        var latlongExtent = that.projectBbox(that._nativeExtent);
+
         var nx, ny;
-        var geodesic = new Cesium.EllipsoidGeodesic(minExtent, p1);
-        nx = Math.ceil(geodesic.surfaceDistance / that._tileSize / 2);
-        geodesic.setEndPoints(minExtent, p2);
-        ny = Math.ceil(geodesic.surfaceDistance / that._tileSize / 2);
-        // TODO : fix extent
-        var minPt = [DEGREES_PER_RADIAN * extent.west, DEGREES_PER_RADIAN * extent.south];
-        minPt = proj4('EPSG:4326',that._srs).forward(minPt);
-        var maxPt = [minPt[0] + nx * that._tileSize * 2, minPt[1] + ny * that._tileSize * 2];
-        maxPt = proj4(that._srs, 'EPSG:4326').forward(maxPt);
-        var betterExtent = new Cesium.Rectangle(extent.west, extent.south, maxPt[0] * RADIAN_PER_DEGREEE, maxPt[1] * RADIAN_PER_DEGREEE);
+        nx = Math.ceil((that._nativeExtent[2] - that._nativeExtent[0]) / that._tileSize / 2);
+        ny = Math.ceil((that._nativeExtent[3] - that._nativeExtent[1]) / that._tileSize / 2);
 
+        var fittedExtent = [nativeExtent[0][0], nativeExtent[0][1], nativeExtent[0][0] + nx * 2 * that._tileSize, nativeExtent[0][1] + ny * 2 * that._tileSize];
+        fittedExtentLatlong = that.projectBbox(fittedExtent);
+        var betterExtent = new Cesium.Rectangle.fromDegrees(fittedExtentLatlong[0], fittedExtentLatlong[1], fittedExtentLatlong[2], fittedExtentLatlong[3]);
 
         that._tilingScheme = new Cesium.GeographicTilingScheme({
             rectangle : betterExtent, 
@@ -175,39 +166,49 @@ glTFTileProvider
         });
 
         // defines the distance at which the data appears
-        that._levelZeroMaximumError = geodesic.surfaceDistance * 0.25 / (65 * ny) * that._loadDistance;
+        that._levelZeroMaximumError = (that._nativeExtent[3] - that._nativeExtent[1]) * 0.25 / (65 * ny) * that._loadDistance;
 
         that._workerPool = new WorkerPool(4, 'js/createglTFGeometry.js');
         that._loadedBoxes = [];
         that._cachedPrimitives = {};
+
         that._colorFunction = function(properties){
             return new Cesium.Color(1.0,1.0,1.0,1.0);
         };
 
-        var ws = [extent.west * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
-        var en = [extent.east * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
-        var wn = [extent.west * DEGREES_PER_RADIAN, extent.north * DEGREES_PER_RADIAN];
-        var es = [extent.east * DEGREES_PER_RADIAN, extent.south * DEGREES_PER_RADIAN];
-        ws = proj4('EPSG:4326',that._srs).forward(ws);
-        en = proj4('EPSG:4326',that._srs).forward(en);
-        wn = proj4('EPSG:4326',that._srs).forward(wn);
-        es = proj4('EPSG:4326',that._srs).forward(es);
-        that._nativeExtent = [ws[0] < wn[0] ? ws[0] : wn[0],
-                              ws[1] < es[1] ? ws[1] : es[1],
-                              es[0] > en[0] ? es[0] : en[0],
-                              wn[1] > en[1] ? wn[1] : en[1]];
         that._nx = nx * 2;
         that._ny = ny * 2;
 
         that._tileLoaded = 0;
         that._tilePending = 0;
-        that._ready = true;
 
-        }catch (err){
+        urlToLoad--;
+        if(urlToLoad === 0) {
+            that._ready = true;            
+        }
+
+        } catch (err){
             console.error(err);
         }
     });
 
+};
+
+glTFTileProvider
+.prototype.projectBbox = function(localBbox) {
+    var ws = [localBbox[0], localBbox[1]];
+    var en = [localBbox[2], localBbox[3]];
+    var wn = [localBbox[0], localBbox[3]];
+    var es = [localBbox[2], localBbox[1]];
+    ws = proj4(this._srs, 'EPSG:4326').forward(ws);
+    en = proj4(this._srs, 'EPSG:4326').forward(en);
+    wn = proj4(this._srs, 'EPSG:4326').forward(wn);
+    es = proj4(this._srs, 'EPSG:4326').forward(es);
+
+    return [ws[0] < wn[0] ? ws[0] : wn[0],
+            ws[1] < es[1] ? ws[1] : es[1],
+            es[0] > en[0] ? es[0] : en[0],
+            wn[1] > en[1] ? wn[1] : en[1]];
 };
 
 glTFTileProvider
@@ -502,16 +503,6 @@ glTFTileProvider
     var m2 = glTFTileProvider
 .computeMatrix(localArray2, cartesianArray2);
 
-    var x0,x1,y0,y1;
-    var lx = this._nativeExtent[2] - this._nativeExtent[0];
-    var ly = this._nativeExtent[3] - this._nativeExtent[1];
-    x0 = tile.x * lx / this._nx + this._nativeExtent[0];
-    x1 = (tile.x + 1) * lx / this._nx + this._nativeExtent[0];
-    y0 = (this._ny - tile.y - 1) * ly / this._ny + this._nativeExtent[1];
-    y1 = (this._ny - tile.y) * ly / this._ny + this._nativeExtent[1];
-
-    var bbox = [x0,y0 < y1 ? y0 : y1 ,x1, y0 < y1 ? y1 : y0];
-
     glTFTileProvider
 .STATS[key].matrix = (new Date()).getTime();
 
@@ -613,7 +604,7 @@ glTFTileProvider
     var geomArray = [];
     var properties = {};
 
-    var request = "http://localhost/server?city=lyon&format=bglTF&query=getGeometry&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
+    var request = this._url + "?city=lyon&format=bglTF&query=getGeometry&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
     /*var request = this._url+
             '?SERVICE=WFS'+
             '&VERSION=1.0.0'+

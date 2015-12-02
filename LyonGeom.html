@@ -66,10 +66,8 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new glTFTileProvider({
-                       url: 'http://ns379426.ip-37-187-164.eu/cgi-bin/tinyows',
-                       layerName: 'tows:lyongeom', 
-                       textureBaseUrl: 'http://ns379426.ip-37-187-164.eu/cesium-buildings-data',
-                       tileSize: 2000,
+                       url: 'http://localhost/server',
+                       layerName: 'lyon', 
                        loadDistance: 3,
                        zOffset: 55
                        });
