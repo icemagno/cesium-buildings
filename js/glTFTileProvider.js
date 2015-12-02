@@ -123,8 +123,10 @@ glTFTileProvider
     Cesium.loadJson(url).then(function(json){
         
         try { // for debugging, otherwise error are caught and failure is silent
-
-        // TODO
+        tiles = json["tiles"];
+        for(var i = 0; i < tiles.length; i++) {
+            that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+        }
 
         urlToLoad--;
         if(urlToLoad === 0) {
@@ -250,14 +252,16 @@ glTFTileProvider
         tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
 
-        if(tile.level >= 1 && tile.level <= 4/* && tile.x === 14 && tile.y === 8*/) {
+        var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
+
+        if(tileId in this._availableTiles) {
             this.prepareTile(tile, frameState);
         } else if(tile.level === 0) {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
         } else {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
-            tile.renderable = false;
+            tile.renderable = true;
         }
     }
 };
@@ -649,6 +653,7 @@ glTFTileProvider
         if (w.data.geom !== undefined) {
             var ab = w.data.geom;
 
+            // Parsing
             var bglTFHeader = new Uint32Array(ab, 0, 5);
             if(bglTFHeader[3] === 0) {  // scene length = 0 -> no glTF to read
                 that.addLoadedTile();
@@ -662,6 +667,7 @@ glTFTileProvider
             var jsonTiles = new Uint8Array(ab, bglTFlength);
             var jsonTilesStr = String.fromCharCode.apply(null, jsonTiles);
 
+            // Building model
             var prim = new Cesium.Model({gltf : bglTF, modelMatrix : m});
             tile.data.primitive.add(prim);
             that._cachedPrimitives[key].push({primitive:prim});
@@ -673,6 +679,12 @@ glTFTileProvider
                 tile.state = Cesium.QuadtreeTileLoadState.DONE;
                 that._workerPool.releaseWorker(w.data.workerId);
             });
+
+            // Adding new available tiles
+            tiles = JSON.parse(jsonTilesStr)["tiles"];
+            for(var i = 0; i < tiles.length; i++) {
+                that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+            }
 
 /*
             var transformationMatrix;
