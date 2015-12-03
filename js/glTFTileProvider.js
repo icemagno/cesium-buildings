@@ -31,6 +31,7 @@ var glTFTileProvider = function(options){
     this._tilingScheme = new Cesium.GeographicTilingScheme(); // needed for ellispoid
     this._loadingPrimitives = {};
     this._availableTiles = {};
+    this._loadedTiles = {};
 
 
     // get capabilities to finish setup and get ready
@@ -246,8 +247,6 @@ glTFTileProvider
         };
 
         tile.data.primitive = new Cesium.PrimitiveCollection();
-        var earthRadius = 6371000;
-        var tileSizeMeters = Math.abs(earthRadius*(tile.rectangle.south - tile.rectangle.north));
 
         tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(tile.rectangle);
         tile.data.boundingSphere2D = Cesium.BoundingSphere.fromRectangle2D(tile.rectangle, frameState.mapProjection);
@@ -255,13 +254,29 @@ glTFTileProvider
         var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
 
         if(tileId in this._availableTiles) {
+            var bbox = this.projectBbox(this._availableTiles[tileId]);
+            var rectangle = Cesium.Rectangle.fromDegrees(bbox[0], bbox[1], bbox[2], bbox[3]);
+            tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(rectangle);
             this.prepareTile(tile, frameState);
-        } else if(tile.level === 0) {
+            /*viewer.entities.add({
+                name : tileId,
+                rectangle : {
+                    coordinates : rectangle,
+                    material : Cesium.Color.RED.withAlpha(0.2),
+                    height : 300.0 + 300 * tile.level,
+                    outline : true,
+                    outlineColor : Cesium.Color.RED
+                }
+            });*/
+        } else if(tile.level === 0 || tile.level === 1) {
             tile.state = Cesium.QuadtreeTileLoadState.DONE;
             tile.renderable = true;
         } else {
-            tile.state = Cesium.QuadtreeTileLoadState.DONE;
-            tile.renderable = true;
+            var parentTileId = (tile.level - 2) + "/" + Math.floor((-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) / 2) + "/" + Math.floor(tile.x / 2);
+            if(parentTileId in this._loadedTiles) { // if the parent tile is already loaded and the tile not available, the tile is empty
+                tile.state = Cesium.QuadtreeTileLoadState.DONE;
+                tile.renderable = true;                
+            }
         }
     }
 };
@@ -433,7 +448,7 @@ var DEBUG_GRID = false;
 
 glTFTileProvider
 .prototype.prepareTile = function(tile, frameState) {
-    var key = tile.x + ";" +  tile.y;
+    var key = tile.x + ";" +  tile.y + ";" + tile.level;
     if(key in this._cachedPrimitives) {
         var cached = this._cachedPrimitives[key];
         for(var p = 0; p < cached.length; p++) {
@@ -608,7 +623,8 @@ glTFTileProvider
     var geomArray = [];
     var properties = {};
 
-    var request = this._url + "?city=lyon&format=bglTF&query=getGeometry&tile=" + (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
+    var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
+    var request = this._url + "?city=lyon&format=bglTF&query=getGeometry&tile=" + tileId;
     /*var request = this._url+
             '?SERVICE=WFS'+
             '&VERSION=1.0.0'+
@@ -673,18 +689,22 @@ glTFTileProvider
             that._cachedPrimitives[key].push({primitive:prim});
             that._loadingPrimitives[w.data.workerId] = prim;
 
+            // When model is loaded, free worker and update tile status
             Cesium.when(prim.readyPromise).then(function(model) {
-                that.addLoadedTile();
                 tile.renderable = true;
                 tile.state = Cesium.QuadtreeTileLoadState.DONE;
+
+                // Adding new available tiles
+                tiles = JSON.parse(jsonTilesStr)["tiles"];
+                for(var i = 0; i < tiles.length; i++) {
+                    that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+                }
+                that._loadedTiles[tileId] = tile;
+                that.addLoadedTile();
+
                 that._workerPool.releaseWorker(w.data.workerId);
             });
-
-            // Adding new available tiles
-            tiles = JSON.parse(jsonTilesStr)["tiles"];
-            for(var i = 0; i < tiles.length; i++) {
-                that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
-            }
+            
 
 /*
             var transformationMatrix;
