@@ -684,7 +684,7 @@ glTFTileProvider
             var jsonTilesStr = String.fromCharCode.apply(null, jsonTiles);
 
             // Building model
-            var prim = new Cesium.Model({gltf : bglTF, modelMatrix : m});
+            var prim = new Cesium.Model({gltf : bglTF, modelMatrix : m, show : false});
             tile.data.primitive.add(prim);
             that._cachedPrimitives[key].push({primitive:prim});
             that._loadingPrimitives[w.data.workerId] = prim;
@@ -699,6 +699,8 @@ glTFTileProvider
                 for(var i = 0; i < tiles.length; i++) {
                     that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
                 }
+                delete that._loadingPrimitives[w.data.workerId];
+                prim.show = true;
                 that._loadedTiles[tileId] = tile;
                 that.addLoadedTile();
 
