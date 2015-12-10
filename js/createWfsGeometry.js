@@ -462,13 +462,13 @@ function urlQueries(url){
 var PACK_GEOMETRIES = false;
 
 onmessage = function(o) {
-    var tileBBox = JSON.parse('['+urlQueries(o.data.request).BBOX+']');
     load(o.data.request, function(xhr) {
         GEOMETRY_STATS["geom_start"] = (new Date()).getTime();
         GEOMETRY_STATS["triangulation_start"] = [];
         GEOMETRY_STATS["triangulation_end"] = [];
         var positionLength = 0;
-        var geoJson = JSON.parse(xhr.responseText);
+        var json = JSON.parse(xhr.responseText);
+        var geoJson = json.geometries;
         for (var f = 0; f < geoJson.features.length; f++) {
             var bbox = new Float32Array(4);
             if (geoJson.features[f].geometry.bbox.length == 6){
@@ -500,7 +500,7 @@ onmessage = function(o) {
             geom.bbox = bbox;
             positionLength += geom.position.length;
 
-            postMessage({geom: geom, workerId : o.data.workerId},
+            postMessage({geom: geom, workerId: o.data.workerId},
                 //geom, 
                 [
                     geom.indices.buffer,
@@ -516,7 +516,7 @@ onmessage = function(o) {
                 
         }
         GEOMETRY_STATS["geom_end"] = (new Date()).getTime();
-        postMessage({workerId : o.data.workerId, stats : GEOMETRY_STATS});
+        postMessage({workerId : o.data.workerId, stats : GEOMETRY_STATS, tiles: json.tiles});
         GEOMETRY_STATS = {};
     });
 };

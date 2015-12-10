@@ -13,7 +13,7 @@
   <script src="js/BboxLib.js"></script>
   <script src="js/WorkerPool.js"></script>
   <script src="js/glTFTileProvider.js"></script>
-  <script src="js/createglTFGeometry.js"></script>
+  <script src="js/TileProvider.js"></script>
   <script src="thirdparty/proj4-src.js"></script>
   <script src="js/proj4-srs.js"></script>
   <style>
@@ -65,7 +65,7 @@ viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
-var tileProvider = new glTFTileProvider({
+var tileProvider = new TileProvider({
                        url: 'http://localhost/server',
                        layerName: 'lyon', 
                        loadDistance: 3,
