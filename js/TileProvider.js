@@ -293,6 +293,12 @@ TileProvider.prototype.computeTileVisibility = function(tile, frameState, occlud
     return frameState.cullingVolume.computeVisibility(boundingSphere);
 };
 
+TileProvider.prototype.updateForPick = function(frameState) {
+    for(var p in this._loadedTiles) {   // probably not the most optimal way to do it
+        this._loadedTiles[p].data.primitive.update(frameState);
+    }
+};
+
 TileProvider.prototype.showTileThisFrame = function(tile, frameState) {
     tile.data.primitive.update(frameState);
 };
@@ -632,7 +638,8 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
             var idx = geomArray.length;
             var geomProperties = JSON.parse(w.data.geom.properties);
             geomProperties.tileX = tile.x;
-            geomProperties.tileY = tile.y;
+            geomProperties.tileY = -1 + that._ny * Math.pow(2, tile.level - 1) - tile.y;
+            geomProperties.tileZ = tile.level - 1;
 
             geomProperties.color = that._colorFunction(geomProperties);
             w.data.geom.color = geomProperties.color;
@@ -670,7 +677,7 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
         prim.properties = properties;
         that._cachedPrimitives[key].push({/*bbox:w.data.geom.bbox,*/ primitive:prim});
         tile.data.primitive.add(prim);
-
+        //viewer.scene.primitives.add(prim);
         // Adding new available tiles
         tiles = w.data.tiles;
         for(var i = 0; i < tiles.length; i++) {
