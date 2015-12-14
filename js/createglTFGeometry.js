@@ -28,7 +28,6 @@ function load(url, callback) {
         } // end for
     }
     xhr.onreadystatechange = ensureReadiness;
-    xhr.responseType = "arraybuffer"
 
     function ensureReadiness() {
         if (xhr.readyState < 4) {
@@ -44,6 +43,7 @@ function load(url, callback) {
         }
     }
     xhr.open('GET', url, true);
+    xhr.responseType = "arraybuffer";
     xhr.send('');
 }
 

@@ -293,6 +293,13 @@ glTFTileProvider
 };
 
 glTFTileProvider
+.prototype.updateForPick = function(frameState) {
+    for(var p in this._loadedTiles) {   // probably not the most optimal way to do it
+        this._loadedTiles[p].data.primitive.update(frameState);
+    }
+};
+
+glTFTileProvider
 .prototype.showTileThisFrame = function(tile, frameState) {
     tile.data.primitive.update(frameState);
 };
