@@ -229,7 +229,6 @@ TileProvider
     return this._levelZeroMaximumError / (1 << level);
 };
 
-
 TileProvider.prototype.loadTile = function(frameState, tile) {
     var that = this;
     if(tile === undefined) {
@@ -258,14 +257,16 @@ TileProvider.prototype.loadTile = function(frameState, tile) {
         if(tileId in this._availableTiles) {
             var bbox = this.projectBbox(this._availableTiles[tileId]);
             var rectangle = Cesium.Rectangle.fromDegrees(bbox[0], bbox[1], bbox[2], bbox[3]);
+            tile.rectangle = rectangle;
             tile.data.boundingSphere3D = Cesium.BoundingSphere.fromRectangle3D(rectangle);
             this.prepareTile(tile, frameState);
+
             /*viewer.entities.add({
                 name : tileId,
                 rectangle : {
                     coordinates : rectangle,
                     material : Cesium.Color.RED.withAlpha(0.1),
-                    height : 300.0 + 300 * tile.level,
+                    height : 300 + 300 * tile.level,
                     outline : true,
                     outlineColor : Cesium.Color.RED
                 }
@@ -299,20 +300,11 @@ TileProvider.prototype.updateForPick = function(frameState) {
     }
 };
 
-TileProvider.prototype.showTileThisFrame = function(tile, frameState) {
-    tile.data.primitive.update(frameState);
-};
-
 var subtractScratch = new Cesium.Cartesian3();
 
-TileProvider.prototype.computeDistanceToTile = function(tile, frameState) {
-    var boundingSphere;
-    if (frameState.mode === Cesium.SceneMode.SCENE3D) {
-        boundingSphere = tile.data.boundingSphere3D;
-    } else {
-        boundingSphere = tile.data.boundingSphere2D;
-    }
-    return Math.max(0.0, Cesium.Cartesian3.magnitude(Cesium.Cartesian3.subtract(boundingSphere.center, frameState.camera.positionWC, subtractScratch)) - boundingSphere.radius);
+TileProvider.prototype.showTileThisFrame = function(tile, frameState) {
+    tile.data.primitive.update(frameState);
+    tile._distance = Math.max(0.0, Cesium.Cartesian3.magnitude(Cesium.Cartesian3.subtract(tile.data.boundingSphere3D.center, frameState.camera.positionWC, subtractScratch)) - tile.data.boundingSphere3D.radius);
 };
 
 TileProvider.prototype.isDestroyed = function() {
@@ -626,8 +618,6 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
         if (w.data.geom !== undefined){
             var transformationMatrix;
             var diag = [es[0] - wn[0], es[1] - wn[1]];
-            var posCenter = new Cesium.Cartesian3(w.data.geom.bbox[0], w.data.geom.bbox[1], 300);
-            Cesium.Matrix4.multiplyByPoint(m, posCenter, posCenter);
             var vectP = [w.data.geom.bsphere_center[0] - wn[0], w.data.geom.bsphere_center[1] - wn[1]];
             if(diag[0] * vectP[1] - diag[1] * vectP[0] < 0) {
                 transformationMatrix = m;
@@ -677,7 +667,7 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
         prim.properties = properties;
         that._cachedPrimitives[key].push({/*bbox:w.data.geom.bbox,*/ primitive:prim});
         tile.data.primitive.add(prim);
-        //viewer.scene.primitives.add(prim);
+
         // Adding new available tiles
         tiles = w.data.tiles;
         for(var i = 0; i < tiles.length; i++) {

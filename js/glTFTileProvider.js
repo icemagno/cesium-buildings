@@ -299,22 +299,12 @@ glTFTileProvider
     }
 };
 
-glTFTileProvider
-.prototype.showTileThisFrame = function(tile, frameState) {
-    tile.data.primitive.update(frameState);
-};
-
 var subtractScratch = new Cesium.Cartesian3();
 
 glTFTileProvider
-.prototype.computeDistanceToTile = function(tile, frameState) {
-    var boundingSphere;
-    if (frameState.mode === Cesium.SceneMode.SCENE3D) {
-        boundingSphere = tile.data.boundingSphere3D;
-    } else {
-        boundingSphere = tile.data.boundingSphere2D;
-    }
-    return Math.max(0.0, Cesium.Cartesian3.magnitude(Cesium.Cartesian3.subtract(boundingSphere.center, frameState.camera.positionWC, subtractScratch)) - boundingSphere.radius);
+.prototype.showTileThisFrame = function(tile, frameState) {
+    tile.data.primitive.update(frameState);
+    tile._distance = Math.max(0.0, Cesium.Cartesian3.magnitude(Cesium.Cartesian3.subtract(tile.data.boundingSphere3D.center, frameState.camera.positionWC, subtractScratch)) - tile.data.boundingSphere3D.radius);
 };
 
 glTFTileProvider
