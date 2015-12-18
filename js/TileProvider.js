@@ -33,6 +33,8 @@ var TileProvider = function(options){
     this._availableTiles = {};
     this._loadedTiles = {};
 
+    this._projectionMatrices = {};
+
 
     // get capabilities to finish setup and get ready
     this._getCapapilitesAndGetReady();
@@ -435,6 +437,58 @@ TileProvider.computeMatrix = function(localPtList, cartesianPtList) {
     return m;
 };
 
+TileProvider.prototype.matrixAtPoint = function(point) {
+    // 500*500 tiling used for approximation matrices
+    var tileSize = 500;
+    var nx, ny;
+    nx = Math.floor((point[0] - this._nativeExtent[0]) / tileSize);
+    ny = Math.floor((point[1] - this._nativeExtent[1]) / tileSize);
+    if([nx,ny] in this._projectionMatrices) {
+        return this._projectionMatrices[[nx,ny]];
+    }
+
+    var deltaLong = (this._tilingScheme.rectangle.east - this._tilingScheme.rectangle.west) / this._tilingScheme.getNumberOfXTilesAtLevel(0) * tileSize / this._tileSize;
+    var deltaLat = (this._tilingScheme.rectangle.north - this._tilingScheme.rectangle.south) / this._tilingScheme.getNumberOfXTilesAtLevel(0) * tileSize / this._tileSize;
+
+
+    var bboxll = [DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.west + nx * deltaLong),
+                    DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.south + ny * deltaLat),
+                    DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.west + (nx + 1) * deltaLong),
+                    DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.south + (ny + 1) * deltaLat)];
+    var ws = [bboxll[0], bboxll[1]];
+    var wn = [bboxll[0], bboxll[3]];
+    var en = [bboxll[2], bboxll[3]];
+    var es = [bboxll[2], bboxll[1]];
+    ws = proj4('EPSG:4326',this._srs).forward(ws);
+    en = proj4('EPSG:4326',this._srs).forward(en);
+    wn = proj4('EPSG:4326',this._srs).forward(wn);
+    es = proj4('EPSG:4326',this._srs).forward(es);
+
+    // matrix
+    // triangle tile
+    var pt1local = new Cesium.Cartesian3(ws[0], ws[1], 0);
+    var pt2local = new Cesium.Cartesian3(es[0], es[1], 0);
+    var pt3local = new Cesium.Cartesian3(wn[0], wn[1], 0);
+    //var pt4local = new Cesium.Cartesian3(en[0], en[1], 0);
+
+    var localArray = [pt1local, pt2local, pt3local];
+    //var localArray2 = [pt4local, pt2local, pt3local];
+
+    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], this._zOffset);
+    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], this._zOffset);
+    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], this._zOffset);
+    //var pt4cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[3], this._zOffset);
+
+    var cartesianArray = [pt1cart, pt2cart, pt3cart];
+    //var cartesianArray2 = [pt4cart, pt2cart, pt3cart];
+
+    var m = TileProvider.computeMatrix(localArray, cartesianArray);
+    //var m2 = TileProvider.computeMatrix(localArray2, cartesianArray2);
+
+    this._projectionMatrices[[nx,ny]] = m;
+    return m;
+}
+
 var DEBUG_POINTS = false;
 var DEBUG_GRID = false;
 
@@ -456,49 +510,6 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
     TileProvider.STATS[key] = {};
     TileProvider.STATS[key].start = (new Date()).getTime();
     tile.state = Cesium.QuadtreeTileLoadState.LOADING;
-    var bboxll = [DEGREES_PER_RADIAN * tile.rectangle.west,
-                    DEGREES_PER_RADIAN * tile.rectangle.south,
-                    DEGREES_PER_RADIAN * tile.rectangle.east,
-                    DEGREES_PER_RADIAN * tile.rectangle.north];
-    var ws = [bboxll[0], bboxll[1]];
-    var wn = [bboxll[0], bboxll[3]];
-    var en = [bboxll[2], bboxll[3]];
-    var es = [bboxll[2], bboxll[1]];
-    ws = proj4('EPSG:4326',this._srs).forward(ws);
-    en = proj4('EPSG:4326',this._srs).forward(en);
-    wn = proj4('EPSG:4326',this._srs).forward(wn);
-    es = proj4('EPSG:4326',this._srs).forward(es);
-
-    // matrix
-    // triangle tile
-    var pt1local = new Cesium.Cartesian3(ws[0], ws[1], 0);
-    var pt2local = new Cesium.Cartesian3(es[0], es[1], 0);
-    var pt3local = new Cesium.Cartesian3(wn[0], wn[1], 0);
-    var pt4local = new Cesium.Cartesian3(en[0], en[1], 0);
-
-    var localArray = [pt1local, pt2local, pt3local];
-    var localArray2 = [pt4local, pt2local, pt3local];
-
-    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], this._zOffset);
-    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], this._zOffset);
-    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], this._zOffset);
-    var pt4cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[3], this._zOffset);
-
-    var cartesianArray = [pt1cart, pt2cart, pt3cart];
-    var cartesianArray2 = [pt4cart, pt2cart, pt3cart];
-
-    var m = TileProvider.computeMatrix(localArray, cartesianArray);
-    var m2 = TileProvider.computeMatrix(localArray2, cartesianArray2);
-
-    var x0,x1,y0,y1;
-    var lx = this._nativeExtent[2] - this._nativeExtent[0];
-    var ly = this._nativeExtent[3] - this._nativeExtent[1];
-    x0 = tile.x * lx / this._nx + this._nativeExtent[0];
-    x1 = (tile.x + 1) * lx / this._nx + this._nativeExtent[0];
-    y0 = (this._ny - tile.y - 1) * ly / this._ny + this._nativeExtent[1];
-    y1 = (this._ny - tile.y) * ly / this._ny + this._nativeExtent[1];
-
-    var bbox = [x0,y0 < y1 ? y0 : y1 ,x1, y0 < y1 ? y1 : y0];
 
     TileProvider.STATS[key].matrix = (new Date()).getTime();
 
@@ -617,14 +628,15 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
         }
         if (w.data.geom !== undefined){
             var transformationMatrix;
-            var diag = [es[0] - wn[0], es[1] - wn[1]];
+            /*var diag = [es[0] - wn[0], es[1] - wn[1]];
             var vectP = [w.data.geom.bsphere_center[0] - wn[0], w.data.geom.bsphere_center[1] - wn[1]];
             if(diag[0] * vectP[1] - diag[1] * vectP[0] < 0) {
                 transformationMatrix = m;
             }
             else {
                 transformationMatrix = m2;
-            }
+            }*/
+            transformationMatrix = that.matrixAtPoint(w.data.geom.bsphere_center);
             var idx = geomArray.length;
             var geomProperties = JSON.parse(w.data.geom.properties);
             geomProperties.tileX = tile.x;
