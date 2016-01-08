@@ -237,8 +237,8 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     var indices = new Uint16Array(3*nIndices);// triangle soup 
     var position = new Float64Array(3*indices.length);
     var normal = new Float32Array(position.length);
-    var tangent = new Float32Array(position.length);
-    var binormal = new Float32Array(position.length);
+    //var tangent = new Float32Array(position.length);
+    //var binormal = new Float32Array(position.length);
     var st = new Float32Array((position.length/3)*2);
     var centroid = [0,0,0];
     var radius = 0;
@@ -417,12 +417,12 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
         indices:indices,
         position:position, 
         normal:normal, 
-        tangent:tangent, 
-        binormal:binormal, 
+        //tangent:tangent, 
+        //binormal:binormal, 
         st:st, 
         bsphere_center:center, 
         bsphere_radius:radius,
-        polygons:polygons
+        //polygons:polygons
     };
 }
 
@@ -506,8 +506,8 @@ onmessage = function(o) {
                     geom.indices.buffer,
                     geom.position.buffer, 
                     geom.normal.buffer, 
-                    geom.tangent.buffer, 
-                    geom.binormal.buffer, 
+                    //geom.tangent.buffer, 
+                    //geom.binormal.buffer, 
                     geom.st.buffer, 
                     geom.bsphere_center.buffer,
                     geom.bbox.buffer
