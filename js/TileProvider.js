@@ -391,7 +391,7 @@ TileProvider.computeMatrix = function(localPtList, cartesianPtList) {
     var pt2cart = cartesianPtList[1];
     var pt3cart = cartesianPtList[2];
 
-    // translation lambert -> lambert originie en pt1
+    // translation lambert -> lambert origine en pt1
     var t0 = new Cesium.Cartesian3(-pt1local.x, -pt1local.y, 0);
 
     // définition de la transformation
@@ -450,34 +450,25 @@ TileProvider.prototype.matrixAtPoint = function(point) {
     var deltaLong = (this._tilingScheme.rectangle.east - this._tilingScheme.rectangle.west) / this._tilingScheme.getNumberOfXTilesAtLevel(0) * tileSize / this._tileSize;
     var deltaLat = (this._tilingScheme.rectangle.north - this._tilingScheme.rectangle.south) / this._tilingScheme.getNumberOfXTilesAtLevel(0) * tileSize / this._tileSize;
 
-
-    var bboxll = [DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.west + nx * deltaLong),
-                    DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.south + ny * deltaLat),
-                    DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.west + (nx + 1) * deltaLong),
-                    DEGREES_PER_RADIAN * (this._tilingScheme.rectangle.south + (ny + 1) * deltaLat)];
-    var ws = [bboxll[0], bboxll[1]];
-    var wn = [bboxll[0], bboxll[3]];
-    var en = [bboxll[2], bboxll[3]];
-    var es = [bboxll[2], bboxll[1]];
-    ws = proj4('EPSG:4326',this._srs).forward(ws);
-    en = proj4('EPSG:4326',this._srs).forward(en);
-    wn = proj4('EPSG:4326',this._srs).forward(wn);
-    es = proj4('EPSG:4326',this._srs).forward(es);
-
     // matrix
     // triangle tile
-    var pt1local = new Cesium.Cartesian3(ws[0], ws[1], 0);
-    var pt2local = new Cesium.Cartesian3(es[0], es[1], 0);
-    var pt3local = new Cesium.Cartesian3(wn[0], wn[1], 0);
+    var pt1local = new Cesium.Cartesian3(this._nativeExtent[0] + nx * tileSize, this._nativeExtent[1] + ny * tileSize, 0);
+    var pt2local = new Cesium.Cartesian3(this._nativeExtent[0] + (nx + 1) * tileSize, this._nativeExtent[1] + ny * tileSize, 0);
+    var pt3local = new Cesium.Cartesian3(this._nativeExtent[0] + nx * tileSize, this._nativeExtent[1] + (ny + 1) * tileSize, 0);
     //var pt4local = new Cesium.Cartesian3(en[0], en[1], 0);
 
     var localArray = [pt1local, pt2local, pt3local];
     //var localArray2 = [pt4local, pt2local, pt3local];
+    
+    var ws = [pt1local.x, pt1local.y];
+    var en = [pt2local.x, pt3local.y];
+    ws = proj4(this._srs, 'EPSG:4326').forward(ws);
+    en = proj4(this._srs, 'EPSG:4326').forward(en);
 
-    var pt1cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[1], this._zOffset);
-    var pt2cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[1], this._zOffset);
-    var pt3cart = new Cesium.Cartesian3.fromDegrees(bboxll[0], bboxll[3], this._zOffset);
-    //var pt4cart = new Cesium.Cartesian3.fromDegrees(bboxll[2], bboxll[3], this._zOffset);
+    var pt1cart = new Cesium.Cartesian3.fromDegrees(ws[0], ws[1], this._zOffset);
+    var pt2cart = new Cesium.Cartesian3.fromDegrees(en[0], ws[1], this._zOffset);
+    var pt3cart = new Cesium.Cartesian3.fromDegrees(ws[0], en[1], this._zOffset);
+    //var pt4cart = new Cesium.Cartesian3.fromDegrees(en[0], en[1], this._zOffset);
 
     var cartesianArray = [pt1cart, pt2cart, pt3cart];
     //var cartesianArray2 = [pt4cart, pt2cart, pt3cart];
@@ -612,7 +603,15 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
     var properties = {};
 
     var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
-    var request = this._url + "?city=lyon&format=GeoJSON&query=getGeometry&tile=" + tileId;
+    var request = this._url + "?city=" + this._layerName + "&format=GeoJSON&query=getGeometry&tile=" + tileId;
+
+
+    var tileY = -1 + that._ny * Math.pow(2, tile.level - 1) - tile.y;
+    var xOffset = that._nativeExtent[0] + tile.x * (that._tileSize / Math.pow(2, tile.level - 1));
+    var yOffset = that._nativeExtent[1] + tileY * (that._tileSize / Math.pow(2, tile.level - 1));
+    var offsetTranslation = new Cesium.Cartesian3(xOffset, yOffset, 0);
+    var offsetMatrix = new Cesium.Matrix4();
+    Cesium.Matrix4.fromTranslation(offsetTranslation, offsetMatrix);
 
     this._workerPool.enqueueJob({request : request}, function(w){
         if (tile.data.primitive === undefined){
@@ -636,11 +635,18 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
             else {
                 transformationMatrix = m2;
             }*/
-            transformationMatrix = that.matrixAtPoint(w.data.geom.bsphere_center);
+
+            var geomCenter = [w.data.geom.bsphere_center[0], w.data.geom.bsphere_center[1]];
+            geomCenter[0] += xOffset;
+            geomCenter[1] += yOffset;
+            transformationMatrix = Cesium.Matrix4.clone(that.matrixAtPoint(geomCenter));
+
+            Cesium.Matrix4.multiply(transformationMatrix, offsetMatrix, transformationMatrix);
+
             var idx = geomArray.length;
             var geomProperties = JSON.parse(w.data.geom.properties);
             geomProperties.tileX = tile.x;
-            geomProperties.tileY = -1 + that._ny * Math.pow(2, tile.level - 1) - tile.y;
+            geomProperties.tileY = tileY;
             geomProperties.tileZ = tile.level - 1;
 
             geomProperties.color = that._colorFunction(geomProperties);

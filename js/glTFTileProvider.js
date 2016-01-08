@@ -621,7 +621,7 @@ glTFTileProvider
     var properties = {};
 
     var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
-    var request = this._url + "?city=lyon&format=bglTF&query=getGeometry&tile=" + tileId;
+    var request = this._url + "?city=" + this._layerName + "&format=bglTF&query=getGeometry&tile=" + tileId;
     /*var request = this._url+
             '?SERVICE=WFS'+
             '&VERSION=1.0.0'+
