@@ -25,6 +25,12 @@ var TileProvider = function(options){
         this._textureBaseUrl += '/';
     }
 
+    if(Cesium.defined(options.fileRoot)) {
+        this._fileRoot = options.fileRoot;
+    } else {
+        this._fileRoot = ".";
+    }
+
     this._quadtree = undefined;
     this._errorEvent = new Cesium.Event();
     this._ready = false; // until we actually have the response from GetCapabilities
@@ -173,7 +179,7 @@ TileProvider
         // defines the distance at which the data appears
         that._levelZeroMaximumError = (that._nativeExtent[3] - that._nativeExtent[1]) * 0.25 / (65 * ny) * that._loadDistance;
 
-        that._workerPool = new WorkerPool(4, 'js/createWfsGeometry.js');
+        that._workerPool = new WorkerPool(4, that._fileRoot + '/js/createWfsGeometry.js');
         that._loadedBoxes = [];
         that._cachedPrimitives = {};
 
@@ -461,13 +467,17 @@ TileProvider.prototype.matrixAtPoint = function(point) {
     //var localArray2 = [pt4local, pt2local, pt3local];
     
     var ws = [pt1local.x, pt1local.y];
+    var wn = [pt1local.x, pt3local.y]
     var en = [pt2local.x, pt3local.y];
+    var es = [pt2local.x, pt1local.y];
     ws = proj4(this._srs, 'EPSG:4326').forward(ws);
+    wn = proj4(this._srs, 'EPSG:4326').forward(wn);
     en = proj4(this._srs, 'EPSG:4326').forward(en);
+    es = proj4(this._srs, 'EPSG:4326').forward(es);
 
     var pt1cart = new Cesium.Cartesian3.fromDegrees(ws[0], ws[1], this._zOffset);
-    var pt2cart = new Cesium.Cartesian3.fromDegrees(en[0], ws[1], this._zOffset);
-    var pt3cart = new Cesium.Cartesian3.fromDegrees(ws[0], en[1], this._zOffset);
+    var pt2cart = new Cesium.Cartesian3.fromDegrees(es[0], es[1], this._zOffset);
+    var pt3cart = new Cesium.Cartesian3.fromDegrees(wn[0], wn[1], this._zOffset);
     //var pt4cart = new Cesium.Cartesian3.fromDegrees(en[0], en[1], this._zOffset);
 
     var cartesianArray = [pt1cart, pt2cart, pt3cart];
@@ -648,6 +658,7 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
             geomProperties.tileX = tile.x;
             geomProperties.tileY = tileY;
             geomProperties.tileZ = tile.level - 1;
+            geomProperties.center = geomCenter;
 
             geomProperties.color = that._colorFunction(geomProperties);
             w.data.geom.color = geomProperties.color;
