@@ -9,6 +9,8 @@
  * @param [options.tileSize=500] : the approximate tile size in meters (will be rounded depending on the tliing scheme)
  * @param [options.loadDistance=3] : @todo explain the units... not realy intuitive
  * @param [options.zOffset=0] : offset in z direction
+ * @param [options.fileRoot=.] : path to the root of the application directory
+ * @param [options.properties=.] : list of semantic properties to load along the geometry
  */
 var TileProvider = function(options){
     
@@ -21,7 +23,7 @@ var TileProvider = function(options){
     this._loadDistance = Cesium.defined(options.loadDistance) ? options.loadDistance : 3;
     this._zOffset = Cesium.defined(options.zOffset) ? options.zOffset : 0;
 
-    if (Cesium.defined(this._textureBaseUrl) && this._textureBaseUrl.slice(-1) != '/'){
+    if (Cesium.defined(this._textureBaseUrl) && this._textureBaseUrl.slice(-1) != '/') {
         this._textureBaseUrl += '/';
     }
 
@@ -29,6 +31,12 @@ var TileProvider = function(options){
         this._fileRoot = options.fileRoot;
     } else {
         this._fileRoot = ".";
+    }
+
+    if(Cesium.defined(options.properties)) {
+        this._propertiesList = options.properties;
+    } else {
+        this._propertiesList = [];
     }
 
     this._quadtree = undefined;
@@ -614,6 +622,13 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
 
     var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
     var request = this._url + "?city=" + this._layerName + "&format=GeoJSON&query=getGeometry&tile=" + tileId;
+    if(this._propertiesList.length != 0) {
+        request += "&attributes="
+        for(var i in this._propertiesList) {
+            request += this._propertiesList[i] + ",";
+        }
+        request = request.slice(0,-1);
+    }
 
 
     var tileY = -1 + that._ny * Math.pow(2, tile.level - 1) - tile.y;
