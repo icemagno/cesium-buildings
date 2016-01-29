@@ -7,8 +7,8 @@
  * Once the url features have been exhausted, the message 'done' is sent.
  */
 
-importScripts('BboxLib.js');
-importScripts('../thirdparty/earcut.js');
+var earcut = require('earcut');
+
 
 /* Simple url loader in pure javascript
  */
@@ -47,7 +47,7 @@ function load(url, callback) {
     }
     xhr.open('GET', url, true);
     xhr.send('');
-}
+};
 
 /* Miscellaneous functions to deal with 3D vectors
  */
@@ -520,4 +520,3 @@ onmessage = function(o) {
         GEOMETRY_STATS = {};
     });
 };
-

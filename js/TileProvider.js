@@ -1,3 +1,7 @@
+var proj4 = require('proj4');
+var initProj4 = require('./initializeProj4');
+var WorkerPool = require('./WorkerPool');
+
 /**
  * Build tiles for a QuatreePrimitive from a wfs source
  * Create a Cesium Geometry from a structure
@@ -13,6 +17,8 @@
  * @param [options.properties=.] : list of semantic properties to load along the geometry
  */
 var TileProvider = function(options){
+
+    initProj4();
     
     if (!Cesium.defined(options.url) || !Cesium.defined(options.layerName)){
         throw new Cesium.DeveloperError('options.url and options.layer are required.');
@@ -25,12 +31,6 @@ var TileProvider = function(options){
 
     if (Cesium.defined(this._textureBaseUrl) && this._textureBaseUrl.slice(-1) != '/') {
         this._textureBaseUrl += '/';
-    }
-
-    if(Cesium.defined(options.fileRoot)) {
-        this._fileRoot = options.fileRoot;
-    } else {
-        this._fileRoot = ".";
     }
 
     if(Cesium.defined(options.properties)) {
@@ -187,7 +187,7 @@ TileProvider
         // defines the distance at which the data appears
         that._levelZeroMaximumError = (that._nativeExtent[3] - that._nativeExtent[1]) * 0.25 / (65 * ny) * that._loadDistance;
 
-        that._workerPool = new WorkerPool(4, that._fileRoot + '/js/createWfsGeometry.js');
+        that._workerPool = new WorkerPool(4, './Workers/createWfsGeometry.js');
         that._loadedBoxes = [];
         that._cachedPrimitives = {};
 
@@ -816,5 +816,9 @@ TileProvider.prototype.removePendingTile = function () {
 TileProvider.prototype.updateProgress = function () {
     var d = document.getElementById("info");
     var tot = this._tilePending + this._tileLoaded;
-    d.innerHTML = "<b>" + this._tileLoaded + "/" + tot + "</b>";
+    if(d) {
+        d.innerHTML = "<b>" + this._tileLoaded + "/" + tot + "</b>";        
+    }
 };
+
+module.exports = TileProvider;

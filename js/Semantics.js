@@ -40,4 +40,6 @@ Semantics.prototype.getAttributes = function(gid, attributesName, callback) {
 
 parseAttributes = function(data) {
 	return data;
-}
+};
+
+module.exports = Semantics;

@@ -1,19 +1,17 @@
-WorkerPool = function( nWorkers, workerFile )
-{
+WorkerPool = function( nWorkers, workerFile ) {
     this.nWorkers = nWorkers;
     this.workers = [];
     // list of free workers
-    this.freeWorkers = []
+    this.freeWorkers = [];
     for ( var i = 0; i < this.nWorkers; i++ ) {
         this.workers[i] = new Worker(workerFile);
         this.freeWorkers.push(i);
     }
     // queue of waiting jobs, when all workers are busy
     this.jobqueue = [];
-}
+};
 
-WorkerPool.prototype.enqueueJob = function( msg, callback )
-{
+WorkerPool.prototype.enqueueJob = function( msg, callback ) {
     if ( this.freeWorkers.length > 0 ) {
         var wi = this.freeWorkers.shift();
         //console.log('[WorkerPool] Using worker #' + wi, this.freeWorkers.length );
@@ -27,10 +25,9 @@ WorkerPool.prototype.enqueueJob = function( msg, callback )
         //console.log('[WorkerPool] All workers busy, enqueing ...');
         this.jobqueue.push( [msg, callback] );
     }
-}
+};
 
-WorkerPool.prototype.releaseWorker = function( wi )
-{
+WorkerPool.prototype.releaseWorker = function( wi ) {
     if ( this.jobqueue.length > 0 ) {
         var m = this.jobqueue.shift();
         var msg = m[0];
@@ -43,5 +40,6 @@ WorkerPool.prototype.releaseWorker = function( wi )
     else {
         this.freeWorkers.push( wi );
     }
-}
+};
 
+module.exports = WorkerPool;
