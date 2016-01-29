@@ -1,3 +1,7 @@
+var proj4 = require('proj4');
+var initProj4 = require('./initializeProj4');
+var WorkerPool = require('./WorkerPool');
+
 /**
  * Build tiles for a QuatreePrimitive from a ?@todo tiled service? source
  * Create a Cesium Geometry from a structure
@@ -11,6 +15,8 @@
  * @param [options.zOffset=0] : offset in z direction
  */
 var glTFTileProvider = function(options){
+
+    initProj4();
     
     if (!Cesium.defined(options.url) || !Cesium.defined(options.layerName)){
         throw new Cesium.DeveloperError('options.url and options.layer are required.');
@@ -124,9 +130,9 @@ glTFTileProvider
     Cesium.loadJson(url).then(function(json){
         
         try { // for debugging, otherwise error are caught and failure is silent
-        tiles = json["tiles"];
+        tiles = json.tiles;
         for(var i = 0; i < tiles.length; i++) {
-            that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+            that._availableTiles[tiles[i].id] = tiles[i].bbox;
         }
 
         urlToLoad--;
@@ -692,9 +698,9 @@ glTFTileProvider
                 tile.state = Cesium.QuadtreeTileLoadState.DONE;
 
                 // Adding new available tiles
-                tiles = JSON.parse(jsonTilesStr)["tiles"];
+                tiles = JSON.parse(jsonTilesStr).tiles;
                 for(var i = 0; i < tiles.length; i++) {
-                    that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+                    that._availableTiles[tiles[i].id] = tiles[i].bbox;
                 }
                 delete that._loadingPrimitives[w.data.workerId];
                 prim.show = true;
@@ -836,3 +842,5 @@ glTFTileProvider
     var tot = this._tilePending + this._tileLoaded;
     d.innerHTML = "<b>" + this._tileLoaded + "/" + tot + "</b>";
 };
+
+module.exports = glTFTileProvider;

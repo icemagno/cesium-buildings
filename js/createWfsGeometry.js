@@ -8,46 +8,8 @@
  */
 
 var earcut = require('earcut');
+var load = require('./XmlHttpLoad.js');
 
-
-/* Simple url loader in pure javascript
- */
-function load(url, callback) {
-    var xhr;
-    if (typeof XMLHttpRequest !== 'undefined') xhr = new XMLHttpRequest();
-    else {
-        var versions = ["MSXML2.XmlHttp.5.0",
-            "MSXML2.XmlHttp.4.0",
-            "MSXML2.XmlHttp.3.0",
-            "MSXML2.XmlHttp.2.0",
-            "Microsoft.XmlHttp"
-        ];
-
-        for (var i = 0, len = versions.length; i < len; i++) {
-            try {
-                xhr = new ActiveXObject(versions[i]);
-                break;
-            } catch (e) {}
-        } // end for
-    }
-    xhr.onreadystatechange = ensureReadiness;
-
-    function ensureReadiness() {
-        if (xhr.readyState < 4) {
-            return;
-        }
-        if (xhr.status !== 200) {
-            return;
-        }
-
-        // all is well
-        if (xhr.readyState === 4) {
-            callback(xhr);
-        }
-    }
-    xhr.open('GET', url, true);
-    xhr.send('');
-};
 
 /* Miscellaneous functions to deal with 3D vectors
  */
@@ -249,7 +211,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
     for (i=0; i<indices.length; i++) indices[i] = i;
 
     // set position and compute 3D centroid
-    GEOMETRY_STATS["triangulation_start"][GEOMETRY_STATS["triangulation_start"].length] = (new Date()).getTime();
+    GEOMETRY_STATS.triangulation_start[GEOMETRY_STATS.triangulation_start.length] = (new Date()).getTime();
     for (i=0, t=0; t<coord.length; t++){
         var delta = 0;
         var positionPolygon = [];
@@ -277,13 +239,13 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
         if(positionPolygon.length < 9) continue;
         var vect1 = [positionPolygon[3] - positionPolygon[0],
                      positionPolygon[4] - positionPolygon[1],
-                     positionPolygon[5] - positionPolygon[2]]
+                     positionPolygon[5] - positionPolygon[2]];
         var vect2 = [positionPolygon[6] - positionPolygon[0],
                      positionPolygon[7] - positionPolygon[1],
-                     positionPolygon[8] - positionPolygon[2]]
+                     positionPolygon[8] - positionPolygon[2]];
         var vectProd = [vect1[1] * vect2[2] - vect1[2] * vect2[1],
                         vect1[2] * vect2[0] - vect1[0] * vect2[2],
-                        vect1[0] * vect2[1] - vect1[1] * vect2[0]]
+                        vect1[0] * vect2[1] - vect1[1] * vect2[0]];
         // triangulation of the polygon projected on planes (xy) (zx) or (yz)
         if(Math.abs(vectProd[0]) > Math.abs(vectProd[1]) && Math.abs(vectProd[0]) > Math.abs(vectProd[2])) {
             // (yz) projection
@@ -346,7 +308,7 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
         }
         polygons.push(positionPolygon);
     }
-    GEOMETRY_STATS["triangulation_end"][GEOMETRY_STATS["triangulation_end"].length] = (new Date()).getTime();
+    GEOMETRY_STATS.triangulation_end[GEOMETRY_STATS.triangulation_end.length] = (new Date()).getTime();
     centroid = mult(centroid, 1.0/ posCount);
     for (i=0; i<3; i++) center[i] = centroid[i];
    
@@ -445,27 +407,11 @@ function geomFromWfs(type, coord, textureCoord){
 
 var texRe = /\((.*),"(.*)"\)/;
 
-/* Parse returns a dictionary of the key=value pairs in the url
- */
-function urlQueries(url){
-    var param = url.replace(/^.*\?/,'').split('&');
-    var queries = {};
-    for (var i=0; i<param.length; i++){
-        var kv = param[i].split('=');
-        queries[kv[0].toUpperCase()] = kv[1];
-    }
-    return queries;
-}
-
-/* Whether or not we want to pack geometries (for DEBUG)
- */
-var PACK_GEOMETRIES = false;
-
 onmessage = function(o) {
     load(o.data.request, function(xhr) {
-        GEOMETRY_STATS["geom_start"] = (new Date()).getTime();
-        GEOMETRY_STATS["triangulation_start"] = [];
-        GEOMETRY_STATS["triangulation_end"] = [];
+        GEOMETRY_STATS.geom_start = (new Date()).getTime();
+        GEOMETRY_STATS.triangulation_start = [];
+        GEOMETRY_STATS.triangulation_end = [];
         var positionLength = 0;
         var json = JSON.parse(xhr.responseText);
         var geoJson = json.geometries;
@@ -515,7 +461,7 @@ onmessage = function(o) {
             );
                 
         }
-        GEOMETRY_STATS["geom_end"] = (new Date()).getTime();
+        GEOMETRY_STATS.geom_end = (new Date()).getTime();
         postMessage({workerId : o.data.workerId, stats : GEOMETRY_STATS, tiles: json.tiles});
         GEOMETRY_STATS = {};
     });

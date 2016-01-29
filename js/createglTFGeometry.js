@@ -9,7 +9,10 @@
 
 /* Simple url loader in pure javascript
  */
-function load(url, callback) {
+
+var load = require('./XmlHttpLoad.js');
+
+/*function load(url, callback) {
     var xhr;
     if (typeof XMLHttpRequest !== 'undefined') xhr = new XMLHttpRequest();
     else {
@@ -45,19 +48,7 @@ function load(url, callback) {
     xhr.open('GET', url, true);
     xhr.responseType = "arraybuffer";
     xhr.send('');
-}
-
-/* Parse returns a dictionary of the key=value pairs in the url
- */
-function urlQueries(url){
-    var param = url.replace(/^.*\?/,'').split('&');
-    var queries = {};
-    for (var i=0; i<param.length; i++){
-        var kv = param[i].split('=');
-        queries[kv[0].toUpperCase()] = kv[1];
-    }
-    return queries;
-}
+}*/
 
 var pending = 0;
 

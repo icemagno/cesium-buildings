@@ -13,7 +13,6 @@ var WorkerPool = require('./WorkerPool');
  * @param [options.tileSize=500] : the approximate tile size in meters (will be rounded depending on the tliing scheme)
  * @param [options.loadDistance=3] : @todo explain the units... not realy intuitive
  * @param [options.zOffset=0] : offset in z direction
- * @param [options.fileRoot=.] : path to the root of the application directory
  * @param [options.properties=.] : list of semantic properties to load along the geometry
  */
 var TileProvider = function(options){
@@ -140,9 +139,9 @@ TileProvider
     Cesium.loadJson(url).then(function(json){
         
         try { // for debugging, otherwise error are caught and failure is silent
-        tiles = json["tiles"];
+        tiles = json.tiles;
         for(var i = 0; i < tiles.length; i++) {
-            that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+            that._availableTiles[tiles[i].id] = tiles[i].bbox;
         }
 
         urlToLoad--;
@@ -475,7 +474,7 @@ TileProvider.prototype.matrixAtPoint = function(point) {
     //var localArray2 = [pt4local, pt2local, pt3local];
     
     var ws = [pt1local.x, pt1local.y];
-    var wn = [pt1local.x, pt3local.y]
+    var wn = [pt1local.x, pt3local.y];
     var en = [pt2local.x, pt3local.y];
     var es = [pt2local.x, pt1local.y];
     ws = proj4(this._srs, 'EPSG:4326').forward(ws);
@@ -496,7 +495,7 @@ TileProvider.prototype.matrixAtPoint = function(point) {
 
     this._projectionMatrices[[nx,ny]] = m;
     return m;
-}
+};
 
 var DEBUG_POINTS = false;
 var DEBUG_GRID = false;
@@ -622,8 +621,8 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
 
     var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
     var request = this._url + "?city=" + this._layerName + "&format=GeoJSON&query=getGeometry&tile=" + tileId;
-    if(this._propertiesList.length != 0) {
-        request += "&attributes="
+    if(this._propertiesList.length !== 0) {
+        request += "&attributes=";
         for(var i in this._propertiesList) {
             request += this._propertiesList[i] + ",";
         }
@@ -715,7 +714,7 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
         // Adding new available tiles
         tiles = w.data.tiles;
         for(var i = 0; i < tiles.length; i++) {
-            that._availableTiles[tiles[i]["id"]] = tiles[i]["bbox"];
+            that._availableTiles[tiles[i].id] = tiles[i].bbox;
         }
         delete that._loadingPrimitives[w.data.workerId];
         that._loadedTiles[tileId] = tile;
