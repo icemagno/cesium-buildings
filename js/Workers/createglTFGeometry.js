@@ -89,3 +89,4 @@ onmessage = function(o) {
     });
 };
 
+module.exports = onmessage;

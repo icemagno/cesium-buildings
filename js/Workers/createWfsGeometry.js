@@ -466,3 +466,5 @@ onmessage = function(o) {
         GEOMETRY_STATS = {};
     });
 };
+
+module.exports = onmessage;

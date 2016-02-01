@@ -1,6 +1,5 @@
 var proj4 = require('proj4');
 var initProj4 = require('./initializeProj4');
-var WorkerPool = require('./WorkerPool');
 
 /**
  * Build tiles for a QuatreePrimitive from a wfs source
@@ -14,6 +13,7 @@ var WorkerPool = require('./WorkerPool');
  * @param [options.loadDistance=3] : @todo explain the units... not realy intuitive
  * @param [options.zOffset=0] : offset in z direction
  * @param [options.properties=.] : list of semantic properties to load along the geometry
+ * @param options.workerPool: the worker pool in which the requests will be queued
  */
 var TileProvider = function(options){
 
@@ -27,6 +27,7 @@ var TileProvider = function(options){
     this._textureBaseUrl = options.textureBaseUrl; // can be undefined
     this._loadDistance = Cesium.defined(options.loadDistance) ? options.loadDistance : 3;
     this._zOffset = Cesium.defined(options.zOffset) ? options.zOffset : 0;
+    this._workerPool = options.workerPool;
 
     if (Cesium.defined(this._textureBaseUrl) && this._textureBaseUrl.slice(-1) != '/') {
         this._textureBaseUrl += '/';
@@ -186,7 +187,6 @@ TileProvider
         // defines the distance at which the data appears
         that._levelZeroMaximumError = (that._nativeExtent[3] - that._nativeExtent[1]) * 0.25 / (65 * ny) * that._loadDistance;
 
-        that._workerPool = new WorkerPool(4, './Workers/createWfsGeometry.js');
         that._loadedBoxes = [];
         that._cachedPrimitives = {};
 
@@ -637,7 +637,7 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
     var offsetMatrix = new Cesium.Matrix4();
     Cesium.Matrix4.fromTranslation(offsetTranslation, offsetMatrix);
 
-    this._workerPool.enqueueJob({request : request}, function(w){
+    this._workerPool.enqueueJob({request: request, worker: "createWfsGeometry"}, function(w){
         if (tile.data.primitive === undefined){
             if(w.data.geom !== undefined) return;   // TODO : cancel request in stead of waiting for its completion
             // tile suppressed while we waited for reply

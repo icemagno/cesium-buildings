@@ -2,7 +2,7 @@ var HtmlPlugin = require('html-webpack-plugin');
 
 module.exports = {
     entry: {
-        createWfsGeometry : "./js/createWfsGeometry.js"
+        WorkerBundle : "./js/Workers/WorkerBundle.js"
     },
     output: {
         path: __dirname + '/public/Workers',

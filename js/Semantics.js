@@ -3,11 +3,13 @@
  *
  * @param options.url: the service's url
  * @param options.layerName: the name of the layer of interest
+ * @param options.workerPool: the worker pool in which the requests will be queued
  */
 
 var Semantics = function(options) {
 	this._url = options.url;
 	this._layer = options.layerName;
+	this._workerPool = options.workerPool;
 };
 
 /**
@@ -24,22 +26,17 @@ Semantics.prototype.getAttributes = function(gid, attributesName, callback) {
 	}
 	attributesStr = attributesStr.substring(0, attributesStr.length - 1);
 
+	var that = this;
 	var request = this._url + "?query=getAttribute&city=" + this._layer + "&gid=" + gid + "&attribute=" + attributesStr;
-	// TODO : add request to worker queue
-	jQuery.ajax(request,{
-        success: function(data, textStatus, jqXHR) {
-			var attributes = parseAttributes(data);
-			callback(attributes);
-		},
-        dataType: 'json',
-        error: function(jqXHR, textStatus, errorThrown) {
-			console.warn(jqXHR + textStatus+': '+errorThrown);
-		}
+	this._workerPool.enqueueJob({request: request, worker: "simpleLoad"}, function(w) {
+		var attributes = parseAttributes(w.data.message);
+		that._workerPool.releaseWorker(w.data.workerId);
+		callback(attributes);
 	});
 };
 
 parseAttributes = function(data) {
-	return data;
+	return JSON.parse(data);
 };
 
 module.exports = Semantics;

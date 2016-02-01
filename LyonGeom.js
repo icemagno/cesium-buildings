@@ -5,6 +5,7 @@ var Cesium = window.Cesium;
 
 var TileProvider = require('./js/TileProvider.js');
 var Semantics = require('./js/Semantics.js');
+var WorkerPool = require('./js/WorkerPool.js');
 
 var viewer = new Cesium.Viewer('cesiumContainer', {scene3DOnly : true});
 
@@ -22,6 +23,10 @@ var cesiumTerrainProviderMeshes = new Cesium.CesiumTerrainProvider({
 });
 viewer.terrainProvider = cesiumTerrainProviderMeshes;
 
+// Worker pool
+// Note: worker path at runtime, not build time
+var workerPool = new WorkerPool(4, './Workers/WorkerBundle.js');
+
 // Tiler
 var rectangle = Cesium.Rectangle.fromDegrees(4.770386,45.716615,4.899764,45.789917);
 var tileProvider = new TileProvider({
@@ -29,7 +34,8 @@ var tileProvider = new TileProvider({
                        layerName: 'lyon_lod2', 
                        loadDistance: 3,
                        zOffset: 55,
-                       properties: ["height"]
+                       properties: [],
+                       workerPool: workerPool
                        });
 viewer.scene.primitives.add(new Cesium.QuadtreePrimitive({tileProvider : tileProvider, additive : true}));
 
@@ -45,7 +51,8 @@ viewer.imageryLayers.addImageryProvider(provider);
 
 var semantic = new Semantics({
     url: "http://localhost/server",
-    layerName: "lyon_lod2"
+    layerName: "lyon_lod2",
+    workerPool: workerPool
 });
 
 function saveStats(){
@@ -141,13 +148,15 @@ function toggleHighlight(){
                     restore.attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(new Cesium.Color(1., 1., 0.));
 
                     var prop = restore.primitive.properties[restore.id];
-                    var addProperty = function(data) {
-                        prop["height"] = data[0]["height"];
-                        tileProvider.setColorFunction(tileProvider._colorFunction); // refresh colors, bourrin
-                    }
+                    var addProperty = function(properties) {
+                        return function(data) {
+                            properties["height"] = data[0]["height"];
+                            tileProvider.setColorFunction(tileProvider._colorFunction); // refresh colors, bourrin
+                        };
+                    };
                     if(restore.primitive.properties[restore.id]["height"] === undefined) {
                         prop["height"] = "pending";
-                        semantic.getAttributes([restore.id], ["height"], addProperty);
+                        semantic.getAttributes([restore.id], ["height"], addProperty(prop));
                     }
 
                     viewer.selectedEntity = entity;

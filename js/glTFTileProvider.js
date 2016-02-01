@@ -13,6 +13,7 @@ var WorkerPool = require('./WorkerPool');
  * @param [options.tileSize=500] : the maximum tile size, e.g. the size of the tile at the root of the quadtree (@todo get from GetCapabilities ?)
  * @param [options.loadDistance=3] : @todo explain the units... not realy intuitive
  * @param [options.zOffset=0] : offset in z direction
+ * @param options.workerPool: the worker pool in which the requests will be queued
  */
 var glTFTileProvider = function(options){
 
@@ -26,6 +27,7 @@ var glTFTileProvider = function(options){
     this._textureBaseUrl = options.textureBaseUrl; // can be undefined
     this._loadDistance = Cesium.defined(options.loadDistance) ? options.loadDistance : 3;
     this._zOffset = Cesium.defined(options.zOffset) ? options.zOffset : 0;
+    this._workerPool = options.wokerPool;
 
     if (Cesium.defined(this._textureBaseUrl) && this._textureBaseUrl.slice(-1) != '/'){
         this._textureBaseUrl += '/';
@@ -177,7 +179,6 @@ glTFTileProvider
         // defines the distance at which the data appears
         that._levelZeroMaximumError = (that._nativeExtent[3] - that._nativeExtent[1]) * 0.25 / (65 * ny) * that._loadDistance;
 
-        that._workerPool = new WorkerPool(4, 'js/createglTFGeometry.js');
         that._loadedBoxes = [];
         that._cachedPrimitives = {};
 
