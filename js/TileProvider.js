@@ -1,5 +1,5 @@
 var proj4 = require('proj4');
-var initProj4 = require('./initializeProj4');
+var initProj4 = require('./initializeProj4.js');
 
 /**
  * Build tiles for a QuatreePrimitive from a wfs source
@@ -54,13 +54,6 @@ var TileProvider = function(options){
     this._getCapapilitesAndGetReady();
 };
 
-var DEGREES_PER_RADIAN = 180.0 / Math.PI;
-var RADIAN_PER_DEGREEE = 1 / DEGREES_PER_RADIAN;
-
-TileProvider
-.TRICOUNT = 0;
-TileProvider
-.STATS = {};
 TileProvider
 ._vertexShader = 
         'attribute vec3 position3DHigh;\n' +
@@ -330,69 +323,6 @@ TileProvider.prototype.destroy = function() {
     return Cesium.destroyObject(this);
 };
 
-TileProvider.geometryFromArrays = function(data){
-    TileProvider.TRICOUNT += data.position.length / 9;
-    var attributes = new Cesium.GeometryAttributes();
-    attributes.position  = new Cesium.GeometryAttribute({
-        componentDatatype : Cesium.ComponentDatatype.DOUBLE,
-        componentsPerAttribute : 3,
-        values : data.position
-    });
-    attributes.st  = new Cesium.GeometryAttribute({
-        componentDatatype : Cesium.ComponentDatatype.FLOAT,
-        componentsPerAttribute : 2,
-        values : data.st
-    });
-    attributes.normal = new Cesium.GeometryAttribute({
-        componentDatatype : Cesium.ComponentDatatype.FLOAT,
-        componentsPerAttribute : 3,
-        values : data.normal
-    });
-
-    attributes.center = new Cesium.GeometryAttribute({
-        componentDatatype : Cesium.ComponentDatatype.FLOAT,
-        componentsPerAttribute : 3,
-        values : new Float32Array(data.position.length)
-    });
-
-    for (var t=0; t<attributes.position.valueslength; t+=9){
-        var i;
-        for (i=0; i<9; i++){
-            attributes.center.values[t+i%3] += attributes.values.position[t+i];
-        }
-        for (i=0; i<3; i++){
-            attributes.center.values[t+i] /= 3;
-        }
-    }
-
-    // TODO uncomment once tangent and binormals are valid
-    //
-    //attributes.tangent = new Cesium.GeometryAttribute({
-    //    componentDatatype : Cesium.ComponentDatatype.FLOAT,
-    //    componentsPerAttribute : 3,
-    //    values : data.normal
-    //});
-    //attributes.binormal = new Cesium.GeometryAttribute({
-    //    componentDatatype : Cesium.ComponentDatatype.FLOAT,
-    //    componentsPerAttribute : 3,
-    //    values : data.normal
-    //});
-    
-    var center = new Cesium.Cartesian3(data.bsphere_center[0], 
-                                       data.bsphere_center[1], 
-                                       data.bsphere_center[2]);
-    var geom = new Cesium.Geometry({
-        attributes : attributes,
-        indices : data.indices,
-        primitiveType : Cesium.PrimitiveType.TRIANGLES,
-        boundingSphere : new Cesium.BoundingSphere(center, data.bsphere_radius)
-    });
-    
-    //geom = Cesium.GeometryPipeline.computeNormal( geom );
-    //geom = Cesium.GeometryPipeline.computeBinormalAndTangent( geom );
-
-    return geom;
-};
 
 // static 
 TileProvider.computeMatrix = function(localPtList, cartesianPtList) {
@@ -515,11 +445,7 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
 
     this.addPendingTile();
     this._cachedPrimitives[key] = [];
-    TileProvider.STATS[key] = {};
-    TileProvider.STATS[key].start = (new Date()).getTime();
     tile.state = Cesium.QuadtreeTileLoadState.LOADING;
-
-    TileProvider.STATS[key].matrix = (new Date()).getTime();
 
     // grid display
     if(DEBUG_GRID) {
@@ -615,168 +541,11 @@ TileProvider.prototype.prepareTile = function(tile, frameState) {
         }
     }
 
-    var that = this;
-    var geomArray = [];
-    var properties = {};
-
-    var tileId = (tile.level - 1) + "/" + (-1 + this._ny * Math.pow(2, tile.level - 1) - tile.y) + "/" + tile.x;
-    var request = this._url + "?city=" + this._layerName + "&format=GeoJSON&query=getGeometry&tile=" + tileId;
-    if(this._propertiesList.length !== 0) {
-        request += "&attributes=";
-        for(var i in this._propertiesList) {
-            request += this._propertiesList[i] + ",";
-        }
-        request = request.slice(0,-1);
-    }
-
-
-    var tileY = -1 + that._ny * Math.pow(2, tile.level - 1) - tile.y;
-    var xOffset = that._nativeExtent[0] + tile.x * (that._tileSize / Math.pow(2, tile.level - 1));
-    var yOffset = that._nativeExtent[1] + tileY * (that._tileSize / Math.pow(2, tile.level - 1));
-    var offsetTranslation = new Cesium.Cartesian3(xOffset, yOffset, 0);
-    var offsetMatrix = new Cesium.Matrix4();
-    Cesium.Matrix4.fromTranslation(offsetTranslation, offsetMatrix);
-
-    this._workerPool.enqueueJob({request: request, worker: "createWfsGeometry"}, function(w){
-        if (tile.data.primitive === undefined){
-            if(w.data.geom !== undefined) return;   // TODO : cancel request in stead of waiting for its completion
-            // tile suppressed while we waited for reply
-            // receive messages from worker until done
-            that._workerPool.releaseWorker(w.data.workerId);
-            tile.state = Cesium.QuadtreeTileLoadState.START;
-            tile.renderable = false;
-            delete that._cachedPrimitives[key];
-            that.removePendingTile();
-            return;
-        }
-        if (w.data.geom !== undefined){
-            var transformationMatrix;
-            /*var diag = [es[0] - wn[0], es[1] - wn[1]];
-            var vectP = [w.data.geom.bsphere_center[0] - wn[0], w.data.geom.bsphere_center[1] - wn[1]];
-            if(diag[0] * vectP[1] - diag[1] * vectP[0] < 0) {
-                transformationMatrix = m;
-            }
-            else {
-                transformationMatrix = m2;
-            }*/
-
-            var geomCenter = [w.data.geom.bsphere_center[0], w.data.geom.bsphere_center[1]];
-            geomCenter[0] += xOffset;
-            geomCenter[1] += yOffset;
-            transformationMatrix = Cesium.Matrix4.clone(that.matrixAtPoint(geomCenter));
-
-            Cesium.Matrix4.multiply(transformationMatrix, offsetMatrix, transformationMatrix);
-
-            var idx = geomArray.length;
-            var geomProperties = JSON.parse(w.data.geom.properties);
-            geomProperties.tileX = tile.x;
-            geomProperties.tileY = tileY;
-            geomProperties.tileZ = tile.level - 1;
-            geomProperties.center = geomCenter;
-
-            geomProperties.color = that._colorFunction(geomProperties);
-            w.data.geom.color = geomProperties.color;
-            properties[geomProperties.gid] = geomProperties;
-            var attributes = {color : new Cesium.ColorGeometryInstanceAttribute(geomProperties.color.red, geomProperties.color.green, geomProperties.color.blue)};
-            geomArray[idx] = new Cesium.GeometryInstance({
-                modelMatrix : transformationMatrix,
-                geometry : TileProvider.geometryFromArrays(w.data.geom),
-                id : geomProperties.gid,
-                attributes : attributes
-            });
-            /*properties[idx] = JSON.parse(w.data.geom.properties);
-            properties[idx].tileX = tile.x;
-            properties[idx].tileY = tile.y;*/
-            return;
-        }
-        var prim = new Cesium.Primitive({
-            geometryInstances: geomArray,
-            //releaseGeometryInstances: false,
-            appearance : new Cesium.MaterialAppearance({
-                material : new Cesium.Material({
-                    fabric : {
-                        type : 'DiffuseMap',
-                        components : {
-                            diffuse :  'vec3(0.5,0.,1.)',
-                            specular : '0.1'
-                        }
-                    }
-                }),
-                vertexShaderSource : TileProvider._vertexShader,
-                fragmentShaderSource : TileProvider._fragmentShader
-            }),
-            asynchronous : false
-        });
-        prim.properties = properties;
-        that._cachedPrimitives[key].push({/*bbox:w.data.geom.bbox,*/ primitive:prim});
-        tile.data.primitive.add(prim);
-
-        // Adding new available tiles
-        tiles = w.data.tiles;
-        for(var i = 0; i < tiles.length; i++) {
-            that._availableTiles[tiles[i].id] = tiles[i].bbox;
-        }
-        delete that._loadingPrimitives[w.data.workerId];
-        that._loadedTiles[tileId] = tile;
-
-        that._workerPool.releaseWorker(w.data.workerId);
-        tile.data.primitive.update(frameState);
-        tile.state = Cesium.QuadtreeTileLoadState.DONE;
-        tile.renderable = true;
-        that.addLoadedTile();
-        TileProvider.STATS[key].geom_stats = w.data.stats;
-        TileProvider.STATS[key].end = (new Date()).getTime();
-    });
+    this.loadGeometry(tile);
 };
 
-/* Return a list of 2D boxes (long lat in degrees) that are not already loaded
- * for a considered region of interest
- */
-TileProvider.prototype.boxes = function(bbox){
-    var loadedBoxes = this._loadedBoxes;
-    var i, j;
-    // check if box is covered by another one
-    for (i=0; i<loadedBoxes.length; i++){
-        if (covers(loadedBoxes[i], bbox)) return {needed:[], available:bbox};
-    }
-
-    // check if pieces are already there (eg zooming out)
-    var level = 0;
-    var covered = [];
-    for (i=0; i<loadedBoxes.length; i++){
-        if (covers(bbox, loadedBoxes[i])){
-            // the level of the box in the quad tree, could be 1,2,4,8...
-            level = Math.max(level, int((loadedBoxes[i][2]-loadedBoxes[i][0])/(bbox[2]-bbox[0])) - 1);
-            covered.push(loadedBoxes[i]);
-        }
-    }
-
-    // create all boxes for the level
-    var neededBoxes = [];
-    var availableBoxes = [];
-    var nbBoxes = Math.pow(4, level);
-    var levelUp = level+1;
-    var size = [(bbox[2]-bbox[0])/levelUp, (bbox[3]-bbox[1])/levelUp];
-    for (i=0; i<nbBoxes; i++){
-        var b = [bbox[0]+(i%levelUp)*size[0], bbox[1]+(i/levelUp)*size[1],
-                 bbox[0]+(i%levelUp + 1)*size[0], bbox[1]+(i/levelUp + 1)*size[1]];
-        for (j=0; j<covered.length; j++){
-            if (covers(covered[j], b)) break;
-        }
-        if (j==covered.length) neededBoxes.push(b);
-        else availableBoxes.push(b);
-    }
-    return {needed:neededBoxes, available:availableBoxes};
-};
-
-/* Cleanup the list of loaded boxes
- */
-TileProvider.prototype.boxLoaded = function(bbox){
-    var loadedBoxes = this._loadedBoxes;
-    for (i=loadedBoxes.length-1; i>=0; i--){
-        if (covers(bbox, loadedBoxes[i])) loadedBoxes.splice(i, 1);
-    }
-    loadedBoxes.push(bbox);
+TileProvider.prototype.loadGeometry = function(tile) {
+    throw "Shouldn't instantiate abstract class";
 };
 
 TileProvider.prototype.setColorFunction = function(colorFunction){

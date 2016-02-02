@@ -3,7 +3,7 @@ require('./thirdparty/cesium/Cesium.js');
 require('./thirdparty/cesium/Widgets/widgets.css');
 var Cesium = window.Cesium;
 
-var TileProvider = require('./js/TileProvider.js');
+var TileProvider = require('./js/WfsTileProvider.js');
 var Semantics = require('./js/Semantics.js');
 var WorkerPool = require('./js/WorkerPool.js');
 

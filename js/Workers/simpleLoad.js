@@ -1,7 +1,7 @@
 var load = require('./XmlHttpLoad.js');
 
 /**
- * Sends back the raw request's response and the worker id.
+ * Sends back the raw request response and the worker id.
  */
 onmessage = function(o) {
     load(o.data.request, function(xhr) {
