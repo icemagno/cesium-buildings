@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+  <title>Teste Tile 3D</title>
+  <script src="thirdparty/earcut.js"></script>
+  <script src="thirdparty/cesium-1.11/Cesium.js"></script>
+  <script src="js/BboxLib.js"></script>
+  <script src="js/WorkerPool.js"></script>
+  <script src="js/WfsTileProvider.js"></script>
+  <script src="thirdparty/proj4-src.js"></script>
+  <script src="js/proj4-srs.js"></script>
+  <style>
+      @import url(thirdparty/cesium-1.11/Widgets/widgets.css);
+      html, body, #cesiumContainer {
+          top: 0px;
+          left: 0px;
+          position: absolute;
+          width: 100%; 
+          height: 100%; 
+          margin: 0; 
+          padding: 0; 
+          overflow: hidden;
+          z-index: -1;
+      }
+      #uiMenu {
+          border-radius:5px;
+          padding: 10px;
+          position:absolute;
+          left: 20px;
+          font-family: "Arial";
+          z-index: 99999;
+      }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="uiMenu">
+    <button type="button" onclick="start()">GET READY</button>
+  </div>
+
+
+  <script>
+
+  // http://sisgeodef.defesa.mil.br:36215/cesium-buildings/index.html
+  
+	var west = -46.4050;
+	var south = -23.6060;
+	var east = -46.3980;
+	var north = -23.5982;	
+	var cameraView = Cesium.Rectangle.fromDegrees(west, south, east, north);
+
+
+/*
+	var baseOsmProvider = new Cesium.createOpenStreetMapImageryProvider({
+		url : 'https://a.tile.openstreetmap.org/'
+	});
+*/
+	
+	
+	var viewer = new Cesium.Viewer('cesiumContainer',{
+		timeline: false,
+		animation: false,
+		skyAtmosphere: false,
+		fullscreenButton : false,
+		geocoder : false,
+		homeButton : false,
+		infoBox : false,
+		sceneModePicker : false,
+		selectionIndicator : false,
+		navigationHelpButton : false,
+		requestRenderMode : true,
+	    scene3DOnly : true,
+	});
+/*
+	viewer = new Cesium.Viewer('cesiumContainer',{
+		timeline: false,
+		animation: false,
+		baseLayerPicker: false,
+		skyAtmosphere: false,
+		fullscreenButton : false,
+		geocoder : false,
+		homeButton : false,
+		infoBox : false,
+		sceneModePicker : false,
+		selectionIndicator : false,
+		navigationHelpButton : false,
+		requestRenderMode : true,
+	    imageryProvider: baseOsmProvider,
+	    scene3DOnly : true,
+	    shouldAnimate : true
+	});
+	var scene = viewer.scene;
+	scene.highDynamicRange = false;
+	scene.globe.enableLighting = false;
+	scene.globe.baseColor = Cesium.Color.WHITE;
+	scene.screenSpaceCameraController.enableLook = false;
+	scene.screenSpaceCameraController.enableCollisionDetection = false;
+	scene.screenSpaceCameraController.inertiaZoom = 0.8;
+	scene.screenSpaceCameraController.inertiaTranslate = 0.8;
+	scene.globe.maximumScreenSpaceError = 1;
+	scene.globe.depthTestAgainstTerrain = true;
+	scene.globe.tileCacheSize = 250;
+	scene.pickTranslucentDepth = true;
+	scene.useDepthPicking = true;
+	
+	var center = Cesium.Rectangle.center(cameraView);
+	var initialPosition = Cesium.Cartesian3.fromRadians(center.longitude, center.latitude, 980000);
+	var initialOrientation = new Cesium.HeadingPitchRoll.fromDegrees(0, -90, 0);
+	scene.camera.setView({
+	    destination: initialPosition,
+	    orientation: initialOrientation,
+	    endTransform: Cesium.Matrix4.IDENTITY
+	});	
+*/
+
+
+viewer.camera.viewRectangle(cameraView);
+
+	
+	var tileProvider = new WfsTileProvider({
+		
+		url: 'http://sisgeodef.defesa.mil.br:36212/geoserver/efestus/planet_osm_polygons/ows',
+		layerName: 'efestus:planet_osm_polygons',
+		
+		//url: 'http://sisgeodef.defesa.mil.br:36215/geoserver/ICA/SBBR_A2_POLIGONO/wfs',
+		//layerName: 'ICA:SBBR_A2_POLIGONO',
+		
+		srs : 'EPSG:4326',
+		debugPoints : true,
+		debugGrid : true,
+		loadDistance : 3,
+		zOffset : 0,
+		tileSize : 1800,    // 500 => 3113 x 3831 || 600 => 2594, 3192 || 2000 => 779, 958 || 1800 =>
+		onUpdateProgress : function( tilePending, tileLoaded, total ){
+			//
+		},
+		onGetReady : function( nativeRectangle, rectangle, numberTilesX, numberTilesY ){
+			console.log( numberTilesX + ", " + numberTilesY );
+		},
+		onComputeDistanceToTile : function( tile, distance ){
+			//
+		},
+		onComputeTileVisibility : function( tile, isVisible ){
+			//
+		},
+		getCapabilities : function( url, xml ){
+			console.log( url );
+		},
+		onRequestFeature : function( urlRequest ){
+			console.log( urlRequest );
+		},
+		boxLoaded : function( box ){
+			console.log( 'boxLoaded' );
+		},
+		beginUpdate : function( context, frameState, commandList ){
+			//console.log( ' *** beginUpdate *** ' );
+		},
+		endUpdate : function( context, frameState, commandList ){
+			//console.log( ' ***  endUpdate  ***' );
+		},
+		onPrepareTile : function( tile ){
+			console.log( 'onPrepareTile' );
+		},
+		onLoadTile : function( context, frameState, tile, tileSizeMeters ){
+			//console.log( tile.x + "," + tile.y + " " + tileSizeMeters + "m");
+		},
+		onPrimitiveLoaded : function( primitive ){
+			console.log( 'primitiveLoaded' );
+		},
+		onBeforeLoadTile : function( tile, bbox ){
+			console.log( bbox );
+		},
+		onDrawDebugPolyLine : function( bboxPL, bboxPL2 ){
+			console.log( 'drawDebugPolyLine' );
+			console.log( bboxPL2 );
+			/*
+	        viewer.entities.add({
+	            polyline : {
+	                positions : bboxPL2,
+	                width : 3,
+	                material : new Cesium.PolylineGlowMaterialProperty({
+	                    glowPower : 0.2,
+	                    color : Cesium.Color.BLUE
+	                })
+	            }
+	        });
+			*/
+		}
+	});
+	
+
+	var qtP = new Cesium.QuadtreePrimitive({tileProvider : tileProvider});
+	viewer.scene.primitives.add( qtP );
+
+	
+	function start(){
+		tileProvider.ready = true;
+	}
+
+  </script>
+</body>
+</html>

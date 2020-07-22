@@ -85,6 +85,9 @@ var RADIAN_PER_DEGREEE = 1 / DEGREES_PER_RADIAN;
 var GEOMETRY_STATS = {};
 
 function cartesianFromDregree(longitude, latitude, height) {
+	console.log( "FF-2" );
+
+	
     var lat = latitude*RADIAN_PER_DEGREEE;
     var lon = longitude*RADIAN_PER_DEGREEE;
     var cosLatitude = Math.cos(lat);
@@ -111,6 +114,10 @@ function cartesianFromDregree(longitude, latitude, height) {
  * TODO: debug tangent and binormals.
  */ 
 function geomFromWfsTin(coord, textureCoord){
+	
+	console.log( "FF-3" );
+
+	
     var t,v,i;
     var U, V, N, Utex, Vtex;
     var nrm;
@@ -226,6 +233,9 @@ function geomFromWfsTin(coord, textureCoord){
  * TODO: debug tangent and binormals.
  */ 
 function geomFromWfsPolyhedralSurface(coord, textureCoord){
+	
+	console.log( "FF-4" );
+
     var t,v,i,j;
     var U, V, N, Utex, Vtex;
     var nrm;
@@ -432,6 +442,10 @@ function geomFromWfsPolyhedralSurface(coord, textureCoord){
  * Note: only Mutipolygon made of triangles are handled for the moment
  */
 function geomFromWfs(type, coord, textureCoord){
+	
+	console.log( "FF-5" );
+
+	
     if (type == 'PolyhedralSurface') {
         return geomFromWfsPolyhedralSurface(coord, textureCoord);
     }
@@ -463,8 +477,12 @@ var PACK_GEOMETRIES = false;
 
 onmessage = function(o) {
     var tileBBox = JSON.parse('['+urlQueries(o.data.request).BBOX+']');
-    load(o.data.request, function(xhr) {
-        GEOMETRY_STATS["geom_start"] = (new Date()).getTime();
+    
+    load( o.data.request, function(xhr) {
+    
+    	console.log("ASYNC LOAD: " + o.data.request );
+    	
+    	GEOMETRY_STATS["geom_start"] = (new Date()).getTime();
         GEOMETRY_STATS["triangulation_start"] = [];
         GEOMETRY_STATS["triangulation_end"] = [];
         var positionLength = 0;
@@ -501,6 +519,8 @@ onmessage = function(o) {
                 geom.bbox = bbox;
                 positionLength += geom.position.length;
 
+                console.log("POSTMESSAGE");
+                
                 postMessage({geom: geom, workerId : o.data.workerId},
                     //geom, 
                     [
